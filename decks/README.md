@@ -1,6 +1,6 @@
 # Shortcut decks
 
-JSON button grids for the Deck tab (SPEC §6.2). The server loads these at startup and resolves `deck.run` to helper actions.
+JSON button grids (SPEC §6.2). The server loads these at startup. The system deck is the title popup. An app deck is the Deck tab until the phone edits it; the edited copy then lives on the phone. `deck.run` still resolves a built-in button, including Sleep and Shut Down.
 
 ## Locations
 
@@ -57,7 +57,7 @@ macOS stores these hotkeys with the **fn** flag that real keyboards attach to ar
 
 Screenshot uses ⌘⇧3: an instant full-screen capture saved to the usual location (not the ⌘⇧5 region/toolbar UI). No Screen Recording permission is needed — macOS takes the screenshot, not Ground Control.
 
-Cut (⌘X), Copy (⌘C), Paste (⌘V), Previous Window (⌘⇧`), Next Window (⌘`), Close Window (⌘W), Hide (⌘H), and Quit (⌘Q) are keystrokes, so they follow whichever app is in front. Quit lets that app ask about unsaved changes.
+Cut (⌘X), Copy (⌘C), Paste (⌘V), Previous (⌘⇧`), Next (⌘`), and Close (⌘W) are keystrokes, so they follow whichever app is in front. The popup does not include Hide, Quit, volume, or playback.
 
 Prefer **`menu`** for per-app shortcuts when a real menu item exists (stable across shortcut changes). Use **`key`** / media keys for system actions that are not menu items (volume, Mission Control, Spotlight, lock screen, screenshot).
 

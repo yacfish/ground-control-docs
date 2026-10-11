@@ -7,9 +7,18 @@
 
 Turn your phone into a trackpad, keyboard, shortcut deck, MIDI controller, app launcher (Dock · running apps · Applications) and menu bar for your Mac: from the couch, across the room, or over Tailscale. No account, no cloud.
 
-The current build is a phone browser and a Node server. The final product is a free menu-bar Mac app (notarized, downloaded from here, not the Mac App Store) plus an iPhone app: trackpad and keys are free, and Text, Deck, MIDI, Apps, Menus and zoom unlock with a Pro in-app purchase. The Mac app posts the clicks and keystrokes and only runs those Pro commands after the iPhone presents a valid purchase. The browser page stays as the free remote. Details are in **[SPEC.md](SPEC.md)** §2.1.
+The current build is a phone browser and a Node server. The plan for what ships is in **[ground-control-research](https://github.com/yacfish/ground-control-research)** (`analysis/mobile-plan.md`, `analysis/monetization.md`, `analysis/porting-windows-linux.md`). In short:
 
-> Status: **v1 prototype.** Trackpad (with 1X / 2X / 4X zoom buttons and a zoom timeout), keyboard (live echo, auto-repeat), a Text composer, focus-aware shortcut decks, **Virtual MIDI** (CoreMIDI source “Ground Control”: pads / CC / pitch / transport), the **Apps** tab (**Dock · Running · Apps**), the **Menus** tab and per-phone **Preferences** (including switching to Keys automatically when a Mac text field is focused) work on a Mac. Helper **0.8.2**. Overlay cursor is still stubbed. The full design lives in **[SPEC.md](SPEC.md)**.
+- The host stays a Mac. Menus and the focused app are why: Windows has no menu bar a remote can read, and the focused app cannot be followed there. A Windows or Linux port of the full product was considered and dropped.
+- The phone apps start as a Capacitor wrap of this page, on the App Store and on Google Play. Small native plugins, Swift on iOS and Kotlin on Android, cover purchases, haptics, and Bluetooth or USB MIDI. A full native rewrite of a platform waits until that platform has 1,000 paying users.
+- Pro is an in-app purchase on each store, so an iPhone and an Android phone are two purchases. Free is the trackpad, the keyboard, and text. Pro, about $15–20, is decks, menu buttons, the app switcher, and a small set of general decks. One Creative Suite package, about $29–49 once, covers the big creative apps together. Decks people build and share stay free. Those prices are placeholders.
+- A MIDI spin-off can be its own controller over Bluetooth or USB, with nothing installed on the computer. The helper here stays optional for layouts, Tailscale, and several devices at once.
+- The Mac app is still a free menu-bar app, notarized, downloaded from the developer, outside the Mac App Store. It posts the clicks and keystrokes and checks each store purchase on the Mac. The browser page stays the free remote.
+- Near term, refine the Keys tab layout first. It is the smaller piece of work, and the tab is due for it. After that, the next big priority for the first release is a strong set of decks.
+
+**[SPEC.md](SPEC.md)** §2.1 is the earlier shape: an iPhone app only, and one Pro unlock for Text, Deck, MIDI, Apps, Menus, and zoom. The research notes replace that.
+
+> Status: **v1 prototype.** Trackpad (pinch, slider, or 1X / 2X / 4X, plus a zoom timeout), keyboard (live echo, auto-repeat), a Text composer, an editable Deck for the focused app, a system popup, **Virtual MIDI** (CoreMIDI source “Ground Control”: pads / CC / pitch / transport), the **Apps** tab (**Dock · Running · Apps**), the **Menus** tab and per-phone **Preferences** work on a Mac. Helper **0.8.2**. What is still open is in **DECK-PLAN.md (only available in the main repo)** and **[SPEC.md](SPEC.md)** §10.
 
 Ground Control is a sibling of [ClipBridge](https://github.com/yacfish/clipbridge) and shares its shape:
 
@@ -20,21 +29,21 @@ Ground Control is a sibling of [ClipBridge](https://github.com/yacfish/clipbridg
 
 Surfaces on the phone (bottom tabs **Trackpad · Keys · Text · Deck · MIDI · Apps · Menus**), all over the same socket:
 
-1. **Trackpad** with Left / Drag lock / Right buttons and **1X · 2X · 4X** zoom presets
+1. **Trackpad** with Left / Drag lock / Right buttons and zoom (pinch or a slider from 1X to 6X, or **1X · 2X · 4X** buttons)
 2. **Keys**: phone keyboard to Mac, special keys, sticky modifiers
-3. **Text**: compose a whole entry, then send it in one go, with a history you can resend, edit, or delete
-4. **Shortcut decks**: system-wide and per-app, following the focused app. An editable grid (resize, move, add, remove, shapes) is planned and not built yet
+3. **Text**: compose a whole entry, then send it in one go, with a history you can resend, edit, or delete. An unsent draft stays when you leave the tab
+4. **Shortcut decks**: the Deck tab is an editable grid for the focused app. **Ground Control** in the status bar opens the system grid on every tab
 5. **Virtual MIDI** controller: layouts you create and select. Each one is a grid of notes, continuous controllers and system widgets, with one channel for the grid or a channel on each control
 6. **Apps**: **Dock** (what's in your Mac's Dock), **Running** (app switcher: activate / hide / quit), **Apps** (Applications folder with search)
 7. **Menus**: the frontmost app's menu tree, read and invoked through macOS Accessibility (never by clicking menu-bar coordinates)
 
 While a session is engaged the Mac cursor grows so it can be seen from the couch, and shrinks back when you let go (or after a timeout you pick in Preferences).
 
-The menu-bar Mac app and the iPhone app above replace this Node server and the browser page as the way the product ships. This repository is the current build.
+This repository is the current build. The research notes above are how it ships.
 
 *Ground Control was briefly called PointerBridge during design; that name is historical only.*
 
-See **[SPEC.md](SPEC.md)** for architecture, protocol, surfaces, permissions and roadmap.
+See **[SPEC.md](SPEC.md)** for architecture, protocol, surfaces, and permissions, and **[ground-control-research](https://github.com/yacfish/ground-control-research)** for the product plan.
 
 ---
 
@@ -89,7 +98,7 @@ Optional `~/.config/ground-control/config.json`:
 ```
 - `PORT` env overrides the port.
 - `sensitivity` is a relative multiplier on top of a built-in 2.5x base pointer gain (`POINTER_BASE_GAIN` in `server/session.js`), so `1.0` is the default speed. `acceleration` is the default curve (0 = linear); each phone can override both in Preferences.
-- `cursorMode`: `system` (grow the real cursor while engaged) or `off`; `overlay` is planned. `cursorScale` is the default engage size (1 to 4). `cursorTimeoutMs` is the default cursor timeout (0 = Until I stop driving).
+- `cursorMode`: `system` (grow the real cursor while engaged) or `off`. `cursorScale` is the default engage size (1 to 4). `cursorTimeoutMs` is the default cursor timeout (0 = Until I stop driving).
 - `idleMs`: no input for this long releases the session (default 20 s).
 - `midiSourceName`: name of the CoreMIDI virtual source.
 - `zoom` picks and tunes the Trackpad 1X / 2X / 4X method (see below): `method` (`auto` / `private` / `keys` / `scroll`), `keySteps2x` / `keySteps4x` / `keyOut` / `keyGapMs` for `keys`, `units2x` / `units4x` / `out` / `scrollUnits` / `scrollTap` / `continuous` / `suppress` for `scroll`, `smooth` for `private`, `motionIdleMs` (default 500) for Zoom during motion. Step counts are guesses until tuned on a Mac.
@@ -97,7 +106,7 @@ Optional `~/.config/ground-control/config.json`:
 ### Trackpad tab
 - One-finger drag moves the pointer (host-side acceleration), tap = left click, double-tap = double click, two-finger tap = right click, two-finger drag = scroll with momentum, hold then drag = select / drag.
 - **Left** / **Drag lock** / **Right** buttons under the pad.
-- **1X · 2X · 4X** under those zoom the Mac screen, one action per press (helper 0.8.2, `zoom.method` in config.json, default `auto`). macOS has no public API to set the Zoom level, and on macOS 12.7.6 Accessibility Zoom ignored synthesized Control + scroll (helpers 0.7.0 to 0.7.2), so there are three methods:
+- Zoom under the pad. Preferences → **Zoom entry method** picks **Pinch** (default), **Slider**, or **Buttons**. Pinch and the slider set anywhere from 1X to 6X. Buttons are the discrete **1X · 2X · 4X** presses. Switching method returns the zoom to 1X. Helper 0.8.2, `zoom.method` in config.json, default `auto`. macOS has no public API to set the Zoom level, and on macOS 12.7.6 Accessibility Zoom ignored synthesized Control + scroll (helpers 0.7.0 to 0.7.2), so there are three methods:
   - **`private`**: the WindowServer's own zoom (`CGSSetZoomParameters`, the private call behind screen zoom), looked up at runtime so a missing symbol just means "not available". **Absolute and exact**: 1X = 1.0, 2X = 2.0, 4X = 4.0, checked by reading it back. It is separate from Accessibility Zoom. The zoom is placed around the pointer when it is set. The view stays there until the pointer reaches an edge of the magnified area, then pans only enough to keep the pointer on that edge (the factor stays 2 or 4). Helper 0.8.2 removed the 0.8.0 / 0.8.1 pointer-follow, which re-centered on every move. A 1X / 2X / 4X choice stays until you press another zoom button, or until the zoom timeout below returns it to 1X. Release, the phone locking, disconnect, the idle timeout, and sending text leave that button level in place. The private zoom goes back to 1x **when the helper exits** (stopping `npm start` unzooms). If the helper was killed or crashed while zoomed, the server resets the private zoom to 1x the next time it starts the helper (and the buttons go back to 1X); Accessibility Zoom is never touched by that reset.
   - **`keys`**: the Zoom keyboard shortcuts (needs **System Preferences > Accessibility > Zoom > Use keyboard shortcuts to zoom**). The helper reads the actual shortcuts from your keyboard settings (default ⌥⌘= / ⌥⌘-) and posts N presses back to back in one action: N = position(target) - position(last level), with 1X = 0, 2X = `keySteps2x` (4), 4X = `keySteps4x` (8); 1X zooms out at least `keyOut` (20) presses, which just stops at 1x.
   - **`scroll`**: the 0.7.2 gesture (Control down, ONE scroll event of position(target) - position(last), Control up; 2X = `units2x`, 4X = `units4x`, 1X at least `-out`), with experiment switches `scrollTap` (`hid` / `session`), `continuous` and `suppress`. Needs "Use scroll gesture with modifier keys to zoom".
@@ -144,7 +153,7 @@ The **Deck** tab shows the deck for the app in front on a fixed 50×50 grid. **E
 
 | Deck | `bundleId` | Buttons |
 |---|---|---|
-| System | (always, title popup) | Mission Control, App Exposé, Show Desktop, Spotlight, Screenshot, Lock Screen, Cut, Copy, Paste, Previous / Next Window, Close Window, Hide, Quit, volume, media, Sleep, Shut Down |
+| System | (always, title popup) | Desktop (Mission Control, App Exposé, Show Desktop, Spotlight, Screenshot, Lock Screen), Clipboard (Cut, Copy, Paste), Windows (Previous, Next, Close), Power (Sleep, Shut Down) |
 | Safari | `com.apple.Safari` | tabs, reload, back / forward, full screen, Reader, bookmarks, find, private window |
 | Chrome | `com.google.Chrome` | tabs (new, close, reopen, previous / next), windows (previous / next), reload, back / forward, Incognito, full screen, find, downloads, bookmarks, home |
 | Finder | `com.apple.finder` | new window / folder, Get Info, Home / Downloads / Desktop, list / icon view, path bar, Move to Trash |
@@ -155,7 +164,7 @@ The **Deck** tab shows the deck for the app in front on a fixed 50×50 grid. **E
 
 Drop overrides in `~/.config/ground-control/decks/*.json`: a user file replaces a built-in with the same `id` or `bundleId`. See [`decks/README.md`](decks/README.md) for the JSON shape (`key`, `text`, `activate`, `menu`, `sequence`). Menu buttons use helper `menu.invoke` via **AXPress only** (SPEC §6.5); no AppleScript.
 
-The **System** popup's Mission Control / App Exposé / Show Desktop / Screenshot (⌘⇧3, instant full screen) buttons send the standard macOS shortcuts, so they need those shortcuts **enabled in System Settings → Keyboard → Keyboard Shortcuts → Mission Control / Screenshots**. Cut, Copy, Paste, Previous Window (⌘⇧`), Next Window (⌘`), Close Window, Hide, and Quit are the same keystrokes in every app and apply to whatever is in front. **Sleep** and **Shut Down** always ask for confirmation on the phone first (OK → runs immediately); see [`decks/README.md`](decks/README.md#confirmation-dangerous-buttons).
+The **System** popup's Mission Control / App Exposé / Show Desktop / Screenshot (⌘⇧3, instant full screen) buttons send the standard macOS shortcuts, so they need those shortcuts **enabled in System Settings → Keyboard → Keyboard Shortcuts → Mission Control / Screenshots**. Cut, Copy, Paste, Previous (⌘⇧`), Next (⌘`), and Close are the same keystrokes in every app and apply to whatever is in front. **Sleep** and **Shut Down** always ask for confirmation on the phone first (OK → runs immediately); see [`decks/README.md`](decks/README.md#confirmation-dangerous-buttons). **Controls** is off the button list for now, so a deck does not have to click. Pressing a control, setting a slider or a field, and stepping a value through Accessibility stay the long-term goal. **Key** and **Extra Keys** can use **Toggle mode**: the first tap holds the key, characters repeat after a short wait, and the second tap releases it. Modifiers stay down and do not repeat. A click, a scroll step, and screen zoom stay on the Trackpad. An app’s own zoom is a menu action when that app offers one. Hide, quit, launch, and Dock items stay on the Apps tab. MIDI stays on the MIDI tab.
 
 ### Menus tab
 The **Menus** tab shows the frontmost app's menu bar as a drill-down list: the **Apple menu () first**, then the app's menus. Tap a menu to open it, the **‹** button or a breadcrumb segment to go back, **↻** to re-read. Each item shows its checkmark, keyboard-shortcut hint (e.g. `⇧⌘N`) and is dimmed when disabled. Submenus are read lazily, one level per tap, so dynamic menus (Open Recent, Window…) are always current; the list resets to the top when another app comes to the front.
@@ -178,13 +187,13 @@ Use the Mac's `100.x` address or MagicDNS name with `:8788`. For HTTPS (`wss://`
 | Trackpad zoom buttons 1X / 2X / 4X via the private WindowServer zoom (helper 0.8.2), Zoom during motion, and zoom timeout (Off / 300s / 60s / 15s, default 60s; a 2X / 4X level returns to 1X after the phone sits still) | ✅ private method and zoom timeout confirmed on this Mac. `keys` / `scroll` stay the fallbacks (`scroll` was ignored by Accessibility Zoom on 12.7.6) |
 | Keyboard: Unicode text, Return → Mac Return, echo with ENTER / SPACE / TAB / BACKSPACE tokens and 1 s idle clear, special keys (⌫ and arrows auto-repeat while held), F-keys, media keys, sticky modifiers (latched / locked), layout-aware shortcuts (AZERTY etc.) | ✅ |
 | Release-everything path (buttons, keys, modifiers, cursor, MIDI notes); signal / stdin-EOF handling off the helper main thread | ✅ |
-| Cursor grow/restore via private `CGSSetCursorScale` (dlsym, crash-restore file), per-phone size and timeout | ⚠️ experimental |
+| Cursor grow/restore via private `CGSSetCursorScale` (dlsym, crash-restore file), per-phone size and timeout | ✅ |
 | Focus tracking (`focus.changed`) drives decks | ✅ |
 | Apps tab, **Dock**: Finder + pinned apps, folders & links, recent apps from `com.apple.dock` prefs; tap opens (`dock.list` / `dock.open`) | ✅ (helper sources; verify on Mac) |
 | Apps tab, **Running**: live list, tap activates, long-press Hide / Quit (`apps.list` / `activate` / `hide` / `quit`, pushed on launch/quit) | ✅ (helper sources; verify on Mac) |
 | Apps tab, **Apps**: `/Applications`, `/System/Applications`, `~/Applications` (+1 sub-folder level), alphabetical + search; tap launches (`apps.catalog` / `apps.open`) | ✅ (helper sources; verify on Mac) |
 | App icons: 96 px PNG per versioned `iconId`, cached in IndexedDB on the phone (`icon.get`) | ✅ |
-| Shortcut decks: built-in System popup, Safari, Chrome, Finder, Max, Spotify, VLC, TV + user overrides, app deck on the Deck tab, server-side `deck.run`, confirm for Sleep / Shut Down | ✅ (menu actions via AXPress) |
+| Shortcut decks: system popup (grouped, dimmed scrim), editable app deck (50×50 cells, pages, phone storage), window controls, built-ins for Safari, Chrome, Finder, Max, Spotify, VLC, TV, confirm for Sleep / Shut Down | ✅ (menu actions via AXPress). Extra button actions still open: DECK-PLAN.md (only available in the main repo) |
 | Helper `menu.get` / `menu.invoke` (AXPress only, no AppleScript): enabled / checked / shortcut with modifiers, Apple menu flagged first, disabled items refused | ✅ (helper sources; verify on Mac) |
 | Menus tab: drill-down tree + breadcrumb, refresh on focus change / drill-down / ↻, invoke by path + id (owner only, stale-app guard), confirm for Quit / Sleep / Restart / Shut Down / Log Out | ✅ |
 | Virtual MIDI: CoreMIDI source (`midiSourceName`, default “Ground Control”), `midi.note` / `midi.cc` / `midi.pitch` / `midi.transport`, all-notes-off on release | ✅ (helper sources; verify on Mac / in a DAW) |
@@ -192,7 +201,6 @@ Use the Mac's `100.x` address or MagicDNS name with `:8788`. For HTTPS (`wss://`
 | Top bar ⋮ menu: light / dark mode, Preferences, Disconnect / Connect (no reload) | ✅ |
 | Preferences: visible tabs, auto Keys on Mac text focus (Chromium / Electron web content included), open keyboard on Keys, MIDI stage mode, pointer and scroll speed, acceleration, invert scroll, cursor size, cursor timeout, zoom during motion, zoom timeout, delete all sent text (`prefs.set`, per phone, resent on connect) | ✅ (auto Keys + cursor: helper sources; zoom timeout confirmed on this Mac) |
 | Local checks: `npm run check` (smoke tests + build), `npm run check:helper` (macOS) | ✅ |
-| Overlay cursor | ⏳ stubbed |
 
 ### Try MIDI in a DAW (Mac)
 

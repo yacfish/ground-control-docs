@@ -1,6 +1,6 @@
 # Ground Control: Specification
 
-Version 0.3 (October 2026: matches main with helper 0.8.2: Preferences, auto Keys, Keys echo and auto-repeat, Text composer, Trackpad zoom presets, zoom timeout confirmed on this Mac, local checks). Author: Yacine Sebti.
+Version 0.3 (October 2026: matches main with helper 0.8.2. The Deck tab is the focused app’s editable grid, and the system grid is the title popup. Preferences, auto Keys, Keys echo and auto-repeat, Text composer, Trackpad zoom, and the zoom timeout are in this build. Zoom timeout confirmed on this Mac. Local checks). Author: Yacine Sebti.
 
 Ground Control turns a phone into a remote **controller** for a Mac: trackpad, keyboard, shortcut decks, MIDI, an Apps surface (Dock, running apps, Applications folder) and the frontmost app's menu bar. It is built for the couch/TV case (Mac on a big screen, you across the room) and works equally over Tailscale. The current build is a phone browser talking to a Node server. The final product is the menu-bar Mac app and the iPhone app in §2.1.
 
@@ -47,7 +47,7 @@ Same shape as [ClipBridge](https://github.com/yacfish/clipbridge):
 ┌──────────────────────▼────────────────────────────┐
 │ Swift helper (gc-helper)                          │
 │  • CGEvent posting (pointer, scroll, keys, text)  │
-│  • cursor scale / overlay cursor                  │
+│  • cursor scale                                   │
 │  • Accessibility: menu tree read + AXPress        │
 │  • NSWorkspace: running apps, activate, launch    │
 │  • Dock prefs, Applications folder, app icons     │
@@ -122,7 +122,7 @@ Only **one client controls the Mac at a time**. A second client that connects (e
 ### Release always means
 1. Release every **held mouse button** (send matching up events).
 2. Release every **held key and modifier** (sticky or physical). No stuck ⌘ after a Wi-Fi blip.
-3. **Restore the cursor** to its pre-session size (or hide the overlay).
+3. **Restore the cursor** to its pre-session size.
 4. Send all-notes-off on any MIDI channel with active notes.
 
 These run in the helper on a single code path so every exit route (explicit, idle, drop, revoke, server shutdown, helper crash recovery) is identical.
@@ -137,8 +137,7 @@ Client sends `ping` every 3 s; server replies `pong`. Server considers the clien
 - On `session.engage` the helper **enlarges the system cursor** (configurable scale, default ~3×) and records the previous scale.
 - On release / idle / socket drop it **restores** the recorded scale.
 - Persist the "original" scale to disk before changing it, so a crash or forced quit can restore it on next launch.
-- Current build: the helper uses the private `CGSSetCursorScale` (looked up with dlsym; experimental) and `cursor-restore.json`. Per phone, Preferences pick the engage size and a **cursor timeout** after which the server shrinks the cursor (`cursor.scale {scale:1}`) and re-grows it on the next pointer activity (§6.7). The overlay cursor is still a stub.
-- **Fallback: overlay cursor.** If changing the system scale proves *sticky* (doesn't apply live, doesn't restore reliably, or needs private API that breaks), switch to an **overlay cursor**: a transparent, click-through, always-on-top window that draws a large pointer (optionally a halo/spotlight) tracking the real cursor. The overlay is purely visual; the real cursor still does the clicking. User-selectable in settings: `system` | `overlay` | `off`.
+- Current build: the helper uses the private `CGSSetCursorScale` (looked up with dlsym) and `cursor-restore.json`. Per phone, Preferences pick the engage size and a **cursor timeout** after which the server shrinks the cursor (`cursor.scale {scale:1}`) and re-grows it on the next pointer activity (§6.7). `cursorMode` is `system` or `off`.
 
 ---
 
@@ -170,21 +169,24 @@ All surfaces share the same socket and session. Bottom tab bar on the phone: **T
 - Echo, Return and IME handling: §6.6.
 
 **Text**
-- A second way to type, beside Keys. Keys streams each change as it happens. Text holds a draft and sends the whole entry as one `key.text` when Send is pressed, and again when a history row is resent (tap the bubble). Blank lines inside the entry are kept; a whitespace-only draft is not sent. The server still caps `key.text` at 4000 characters.
+- A second way to type, beside Keys. Keys streams each change as it happens. Text holds a draft and sends the whole entry as one `key.text` when Send is pressed, and again when a history row is resent (tap the bubble). The unsent draft stays on the phone (`gc_text_draft_v1`) when you leave the tab or reload. Send and Return clear it. Blank lines inside the entry are kept; a whitespace-only draft is not sent. The server still caps `key.text` at 4000 characters.
 - History (last 50, on the phone only, `localStorage`) is grouped Earlier / Yesterday / Today, newest at the bottom, same composer as ClipBridge. Tap a bubble to resend it. Swipe a row left for Edit (loads it back into the composer without sending) and Delete. The row just sent flashes. Preferences → **Delete all sent text** clears the list and does not type anything on the Mac.
+- **Return**, immediately left of Send, is always enabled. With text in the composer it sends that text and then a Return key. With an empty composer it sends only the Return key.
 - The tab icon is a text field with a caret. The tab is on by default with the others and can be hidden in Preferences.
 
 ### 6.2 Shortcut decks (focus-aware)
-- A grid of big buttons, each mapping to a keystroke, key sequence, text snippet, menu item path, or app activation.
-- **System deck**: always available (Mission Control, App Exposé, Spotlight, screenshot (⌘⇧3), lock screen, show desktop, volume, play/pause, sleep, shut down, etc.). Sleep / shut down are *dangerous* actions: the phone shows a confirm sheet and `deck.run` must carry `confirmed: true`; server and helper both refuse otherwise (helper `system.sleep` via IOKit, `system.shutdown` via a `kAEShutDown` Apple Event to loginwindow; no AppleScript). Mission Control (⌃↑), App Exposé (⌃↓) and Show Desktop (F11) are sent with `fn` as the standard shortcuts, so they must be enabled in System Settings → Keyboard → Keyboard Shortcuts.
-- **Per-app decks**: keyed by bundle ID. The helper watches the frontmost app (`NSWorkspace` activation notifications) and the server pushes `focus.changed {bundleId, name, pid}`; the client switches to that app's deck automatically, with the system deck one swipe away.
-- Decks are JSON files in `~/.config/ground-control/decks/` with built-ins shipped in the repo (`decks/`); a user file replaces a built-in with the same `id` or `bundleId`.
-- **Editable layout** (same idea as MIDI, not in this build). Each deck the phone has edited is a grid stored on the phone. Change the column and row counts, drag a button to another cell, add one, or remove one. A button has a shape (1×1, 2×1, 2×2) and an action (keystroke, text, menu item, or app). Until a deck is edited, the built-in grid is what shows. Sleep / shut down keep the confirm sheet.
+- The **Deck** tab is one grid: the deck for the frontmost app. There is no System segment and no swipe between System and App.
+- **System popup**: the words **Ground Control** in the status bar open it, on every tab. A 25% black scrim covers the screen under the popup. Tap the title again, or tap the scrim, to close it. It is fixed: no edit mode and no pages. Groups, from `decks/system.json`: **Desktop** (Mission Control, App Exposé, Show Desktop, Spotlight, Screenshot, Lock Screen), **Clipboard** (Cut, Copy, Paste), **Windows** (Previous, Next, Close), **Power** (Sleep, Shut Down). Sleep / shut down are *dangerous*: the phone shows a confirm sheet and `deck.run` must carry `confirmed: true`; server and helper both refuse otherwise (helper `system.sleep` via IOKit, `system.shutdown` via a `kAEShutDown` Apple Event to loginwindow; no AppleScript). Mission Control (⌃↑), App Exposé (⌃↓) and Show Desktop (F11) are sent with `fn` as the standard shortcuts, so they must be enabled in System Settings → Keyboard → Keyboard Shortcuts. Cut, Copy, Paste, and the window shortcuts are keystrokes and follow the focused app.
+- **Per-app decks**: keyed by bundle ID. The helper watches the frontmost app (`NSWorkspace` activation notifications) and the server pushes `focus.changed {bundleId, name, pid}`; the client switches to that app's deck. The header shows that app's icon beside its name. An app with no deck shows the empty state.
+- Built-in decks are JSON in `decks/`, overridable by `~/.config/ground-control/decks/` when `id` or `bundleId` matches. Until the phone edits an app's deck, those buttons are what show, laid out on the grid. After an edit, that deck is stored on the phone (`gc_app_decks_v1`) and the built-in is only the starting copy. The system grid always comes from the server. Share downloads or uploads the phone's copy as JSON.
+- **Editable app deck**, the MIDI gestures on a fixed grid. Cells are 50×50, and a button has its own width and height in cells. **Edit** moves, adds, and removes; a press does nothing while editing. Drag moves a button, the corner control copies it, and the title trash deletes it. Dragging a button off the right edge opens the next page when one does not exist yet, and only while another button remains on the page being left. An emptied page collapses forward. More than one page shows a row of dots and a swipe; one page has no dots. Editor kinds: Menu, Key, Extra Keys, Text, Controls, Label. A menu label set to Auto follows that item's title, including when exactly one title in that menu is replaced by one new title and the neighbors match. Sleep / shut down on a built-in button keep the confirm sheet.
+- **Controls** opens the front window's Accessibility controls (buttons, sliders, checks, text fields, steppers), grouped by the containers the app names. `window.controls` lists them; `window.press` and `window.set` act on a path of child indexes. A slider follows the finger.
+- **Key** and **Extra Keys** can turn on **Toggle mode**. The first tap sends `key.down` (with the button’s modifiers) and the button fills. The second tap sends `key.up`. After a 500 ms wait, a non-modifier key repeats as further `key.down` events with `repeat: true` until that second tap. Modifiers stay down and do not repeat. Media keys step with `key.press` on each repeat. A long press still opens the button settings. A click, a scroll step, and screen zoom stay on the Trackpad (§6.8). An app’s own zoom is a menu action when that app offers one. Hide, quit, launch, and opening a Dock item stay on the Apps tab (§6.4). MIDI stays on the MIDI tab (§6.3).
 - Built-in decks:
 
   | Deck | `bundleId` | Buttons |
   |---|---|---|
-  | System | (always) | Mission Control, App Exposé, Show Desktop, Spotlight, Screenshot, Lock Screen, Vol −, Mute, Vol +, Previous, Play / Pause, Next, Sleep, Shut Down |
+  | System | (always, title popup) | Desktop, Clipboard, Windows, Power — see the groups above |
   | Safari | `com.apple.Safari` | New Tab, Close Tab, Reload, Back, Forward, Full Screen, Reader, Bookmarks, Find, Private Window |
   | Chrome | `com.google.Chrome` | New Tab, Close Tab, Reopen Tab, Reload, Back, Forward, Incognito, Full Screen, Find, Downloads, Bookmarks, Home, Previous Tab, Next Tab, Previous Window, Next Window |
   | Finder | `com.apple.finder` | New Window, New Folder, Get Info, Home, Downloads, Desktop, as List, as Icons, Path Bar, Move to Trash |
@@ -193,8 +195,7 @@ All surfaces share the same socket and session. Bottom tab bar on the phone: **T
   | VLC | `org.videolan.vlc` | Play, Pause, Stop, Next, Previous, Fullscreen, Volume Up, Volume Down, Mute, Subtitles |
   | TV | `com.apple.TV` | Play / Pause, Full Screen, Skip Back, Skip Forward, Volume Up, Volume Down, Mute, Home |
 
-- Phone UI: **System / App** segments (tap or swipe), auto-selecting the App deck when the front app has one; buttons in a 2-column grid, at least 48 px tall. Buttons marked `confirm` (and sleep / shut down) open a modal confirm sheet first.
-- A deck button that targets a **menu item** uses the same AX invocation as §6.5 (preferred over a keystroke when an app's shortcut is unreliable).
+- A deck button that targets a **menu item** uses the same AX invocation as §6.5 (preferred over a keystroke when an app's shortcut is unreliable). An edited button sends that helper message itself (`key.press`, `key.text`, `menu.invoke`, `apps.activate`). Built-in Sleep and Shut Down still go through `deck.run` with `confirmed: true`.
 
 ### 6.3 Virtual MIDI
 - The helper creates a **CoreMIDI virtual source** named "Ground Control" (overridable via `config.json` → `midiSourceName` / helper `--midi-source-name`), visible to any DAW / synth / VJ app (Logic, Ableton, MainStage, Resolume…) with no driver install.
@@ -281,11 +282,12 @@ Preferences (centered Cancel / OK dialog), saved in the phone's `localStorage` a
 - **Mouse**: **Pointer and scroll speed** (`pointerSpeed`, 0.25 to 3, multiplies `POINTER_BASE_GAIN` (2.5) x `sensitivity`; the same multiplier, without the base gain or acceleration, scales `pointer.scroll` dx / dy server-side, so 1.0 leaves scroll unchanged), **Acceleration** (0 to 1.5, pointer only, replaces config `acceleration` for this phone), **Invert scroll direction** (flips both scroll axes server-side).
 - **Cursor size**: Off / Small / Medium / Large = engage scale 1 / 2 / 3 / 4, sent to the helper with `session.engage {cursorScale}` and live as `cursor.scale {scale}` while engaged.
 - **Cursor timeout**: `cursorTimeout` seconds (0.5 to 10, slider steps 0.5 / 1 / 2 / 3 / 5 / 10) or 0 = *Until I stop driving* (only release / idle shrink it). `null` = config `cursorTimeoutMs` (default 0). Timed on the server: after the owner's last pointer activity (`pointer.move` / `button` / `click` / `scroll`, or a fresh `session.engage` touch) it sends `cursor.scale {scale:1}`; the next pointer activity sends `cursor.scale {scale}` again. Does not end the session. Needs helper 0.6.0+ (`cursor.scale`); older helpers keep the cursor big until release.
+- **Zoom entry method** (phone only, not sent in `prefs.set`): **Pinch** (default), **Slider**, or **Buttons**. Pinch and the slider set a factor from 1.00 to 6.00 (`zoom.set {factor}`). Buttons stay the discrete 1X / 2X / 4X levels (`zoom.set {level}`). Choosing another method on Preferences OK returns the zoom to 1X. Two-finger drag still scrolls while pinch is the entry method.
 - **Zoom during motion**: 1X / 1.25X / 1.5X (`zoomMotion` 1 / 1.25 / 1.5, default 1X). While this phone moves the pointer, the Mac screen zooms to that level (private zoom), then returns to the button level `zoom.motionIdleMs` (500 ms) after the last movement; 1X never zooms in further on movement (§6.8).
 - **Zoom timeout**: Off / 300s / 60s / 15s (`zoomTimeout` 0 / 300 / 60 / 15, default 60). A 2X or 4X button level returns to 1X after the phone sits still for that long (§6.8). Confirmed on this Mac.
 
-### 6.8 Zoom presets (Trackpad 1X / 2X / 4X)
-- One action per press, levels 1X / 2X / 4X. macOS has no public API that sets the Zoom level (UniversalAccess.h only offers `UAZoomEnabled` / `UAZoomChangeFocus`, which move the zoomed view's focus), and on macOS 12.7.6 Accessibility Zoom ignored our synthesized Control + scroll (0.7.0 to 0.7.2, nil-source and HID-state source, HID tap, flags on the event). Helper 0.8.x therefore has three methods, picked by config.json `zoom.method` (sent with every `zoom.set`):
+### 6.8 Zoom presets (Trackpad)
+- Discrete levels are 1X / 2X / 4X, one action per press. Pinch and the slider (§6.7) send `zoom.set {factor}` from 1 to 6, rounded to 0.01; the helper sets that private factor without the button-level verify. macOS has no public API that sets the Zoom level (UniversalAccess.h only offers `UAZoomEnabled` / `UAZoomChangeFocus`, which move the zoomed view's focus), and on macOS 12.7.6 Accessibility Zoom ignored our synthesized Control + scroll (0.7.0 to 0.7.2, nil-source and HID-state source, HID tap, flags on the event). Helper 0.8.x therefore has three methods, picked by config.json `zoom.method` (sent with every `zoom.set`):
 - **`private`**: the WindowServer zoom, `CGSSetZoomParameters(cid, &origin, factor, smooth)` with `CGSMainConnectionID()` (or the SkyLight `SLS` aliases), resolved with dlsym at first use so a missing symbol means "not available", never a crash. Absolute: 1X / 2X / 4X = factor 1 / 2 / 4, origin chosen so the pointer stays put. Verified by `CGSGetZoomParameters` after each set; a set that does not read back marks the method as not working (auto then falls back). This zoom is independent of Accessibility Zoom's state (`closeViewZoomFactor` does not change). The origin is chosen around the pointer when the level is set. The view stays there until the pointer reaches an edge of the magnified area, then the helper pans the origin only enough to keep the pointer on that edge. The factor does not change. Edge panning is the only later change to the origin. 0.8.0 / 0.8.1 re-applied the last successful private factor around the pointer on every `pointer.move` (pointer-follow) until a later private Set(1) succeeded, so a 1X that went through keys / scroll (auto fallback after an unverified smooth set), a failed Set(1) or a zoom-out done elsewhere left that factor at 2 / 4 and moving the pointer zoomed the screen back in; 0.8.2 removed the follow entirely. A smooth set is verified by polling `CGSGetZoomParameters` for up to ~0.4 s; before a `keys` / `scroll` press the helper puts a private zoom it holds back to 1 (no stacking). A 1X / 2X / 4X button level stays across `session.release` (Release, disconnect, idle, takeover) and across other tabs, including a `key.text` send. `session.release` only drops a motion zoom back to that button level. The private zoom goes back to factor 1 on helper exit, since nothing could undo it once the helper is gone. A helper that is killed or crashes cannot run that reset, so when the server starts or restarts the helper, the first `zoom.get` reply with `privateAPI: true` and `privateFactor > 1.001` makes it send `zoom.resetPrivate`: the helper re-reads the factor with `CGSGetZoomParameters` and, if still above 1x, sets it to 1 and replies `zoom.state {mode: "reset"}`; the server then sets its tracked level to 1X. Accessibility Zoom is never touched by this reset (0.8.1). Manual recovery: `node scripts/zoom-probe.js private 1`, or restart `npm start`. Signatures are the community-documented ones (stackoverflow.com/questions/13100589; the SLS zoom symbols are listed in github.com/NUIKit/CGSInternal/issues/3); unverified on macOS 12.7.6.
 - **`keys`**: the Zoom keyboard shortcuts ("Use keyboard shortcuts to zoom", `closeViewHotkeysEnabled`). The shortcuts are read from `com.apple.symbolichotkeys` `AppleSymbolicHotKeys` 17 (zoom in) and 19 (zoom out) `parameters` [char, keyCode, modifiers] (defaults ⌥⌘= 0x18 / ⌥⌘- 0x1B). One action = modifiers down once, N key down / up pairs back to back (`keyGapMs`, default 0), modifiers up, all from the HID-state source at the HID tap. N = pos(target) - pos(from) with 1X = 0, 2X = `keySteps2x` (4), 4X = `keySteps4x` (8); 1X zooms out at least `keyOut` (20) presses (clamps at 1x).
 - **`scroll`**: the 0.7.2 gesture: modifier key-down (`flagsChanged`, `kVK_Control` 0x3B), ONE scroll-wheel event of pos(target) - pos(from) (2X = `units2x`, 4X = `units4x`, 1X at least `-out`) carrying the modifier flags, modifier key-up, `leadMs` apart. Experiment switches: `scrollTap` `hid` (default) or `session`, `continuous` (sets `kCGScrollWheelEventIsContinuous`), `suppress` (source `localEventsSuppressionInterval = 0` and local events permitted during suppression).
@@ -393,7 +395,7 @@ Errors from the helper carry `ref: <request type>`.
 
 `~/.config/ground-control/`
 - `token`: auth token
-- `config.json`: port, sensitivity, acceleration, cursor mode (`system`/`overlay`/`off`) and scale, cursor timeout, idle timeout, MIDI source name, `zoom` tuning (§6.8)
+- `config.json`: port, sensitivity, acceleration, cursor mode (`system`/`off`) and scale, cursor timeout, idle timeout, MIDI source name, `zoom` tuning (§6.8)
 - `decks/*.json`: user decks (override / extend built-ins by bundle ID)
 - `cursor-restore.json`: pre-session cursor scale (crash recovery)
 
@@ -407,18 +409,17 @@ Errors from the helper carry `ref: <request type>`.
 1. Node server: static client, token, WebSocket, heartbeat, ownership, release-everything path. ✅
 2. Swift helper: pointer / click / scroll / text / keys with CGEvent; Accessibility check. ✅
 3. Client: trackpad + keyboard with sticky modifiers, echo, auto-repeat. ✅
-4. Cursor grow/restore (✅ experimental, with per-phone size and timeout); overlay fallback (⏳ stub).
+4. Cursor grow/restore (✅, with per-phone size and timeout).
 5. Apps tab: Dock, running apps (switcher), Applications folder; focus tracking. ✅
-6. Shortcut decks (system + per-app). ✅
+6. Shortcut decks: system popup plus the focused app’s editable deck, including window controls and key toggle mode. ✅
 7. Menu tree via Accessibility with AXPress invocation, Apple menu always present. ✅
 8. Virtual MIDI. ✅
 9. Top menu, theme, Preferences, auto Keys on Mac text focus. ✅
-10. Trackpad zoom presets (1X / 2X / 4X), Zoom during motion, and zoom timeout (Off / 300s / 60s / 15s, default 60). ✅ private method and zoom timeout confirmed on this Mac (helper 0.8.2; 0.8.0 builds on Xcode 14.2 and the private symbols resolve). `keys` / `scroll` remain the fallbacks; Accessibility Zoom ignored synthesized Control + scroll on 12.7.6.
+10. Trackpad zoom: 1X / 2X / 4X buttons, pinch or a slider from 1X to 6X, Zoom during motion, and zoom timeout (Off / 300s / 60s / 15s, default 60). ✅ private method and zoom timeout confirmed on this Mac (helper 0.8.2; 0.8.0 builds on Xcode 14.2 and the private symbols resolve). `keys` / `scroll` remain the fallbacks; Accessibility Zoom ignored synthesized Control + scroll on 12.7.6.
 
 **Final product** (§2.1). Not built yet.
 - Menu-bar Mac app, notarized, off the store: server, input, Accessibility, QR code, login item, command gate.
 - iPhone app on the App Store: free trackpad and keys, Pro in-app purchase for the other surfaces. The Mac accepts Pro commands only with Apple's signed transaction.
-- Editable Deck grid (§6.2), same gestures as MIDI.
 
 **v1 remains** the Node server, the helper and the browser page until that app exists. The one-pointer rule (§4) stays.
 
@@ -440,7 +441,7 @@ Errors from the helper carry `ref: <request type>`.
 | WebSocket stream for input, not HTTP | Locked |
 | Phone is a controller only: **no screen stream** | Locked |
 | Swift helper posts CGEvent; Accessibility permission | Locked |
-| Cursor grows on engage, restores on release / idle / socket drop; overlay cursor if system scale is sticky | Locked |
+| Cursor grows on engage, restores on release / idle / socket drop | Locked |
 | Menus invoked via **Accessibility (AXPress) only**, never AppleScript and never by clicking menu-bar coordinates | **Locked** |
 | Apple menu always present in the menu tree | Locked |
 | Apps tab = **Dock · Running · Apps** sections (no new bottom tab); running-apps switcher kept | Locked |
@@ -450,7 +451,7 @@ Errors from the helper carry `ref: <request type>`.
 | Zoom presets: one action per press via `zoom.method` (auto: private WindowServer zoom if available and verified, else Zoom keyboard shortcuts, else one modifier + scroll event); relative methods track the last level and 1X overshoots as a reset; private zoom is placed around the pointer when set and then pans only at the magnified edge; a 1X / 2X / 4X button level stays across release and returns to 1X on the zoom timeout (default 60 s) or when the helper exits; Zoom during motion and the zoom timeout are server-timed; never AppleScript | Locked |
 | No hosted CI (GitHub Actions removed): `npm run check` and, on a Mac, `npm run check:helper` before pushing | Locked |
 | Final product (§2.1): free notarized Mac menu-bar app off the store + App Store iPhone app (free trackpad and keys, Pro in-app purchase). The Mac gates Pro commands after a signed StoreKit transaction. The browser page stays the free remote | Locked |
-| Editable grids: MIDI and Deck. Change columns and rows, drag, add, remove, pick a shape and a function. MIDI is in the current build (§6.3). Deck is the same idea, not built yet (§6.2) | Locked |
+| Editable grids: MIDI chooses its column and row counts. The Deck uses fixed 50×50 cells, separate width and height, and pages. Both are in this build (§6.2, §6.3). Deck buttons still cannot send every helper command the plan lists | Locked |
 
 ---
 
