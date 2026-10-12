@@ -38,17 +38,56 @@ The one list of everything Accessibility returns was clunky, and some of those a
 
 Every phone may play at once. Note on, note off, CC, pitch, and transport all go to the same virtual source.
 
-The sync that matters is the pad, not only the bytes. If two phones have a pad for the same sounding note, pressing it on one turns that pad on on the other, and releasing it turns both off together. The pad stays on while any phone is still holding that note, and goes off when the last finger lifts. A note that exists on only one phone just plays. A layout kept in sync, below, also lights the same widget, even when one phone's octave offset makes that widget sound a different note.
+The sync that matters is which note and channel a control is sending, not only the bytes. Each phone applies its channel shift and its octave offset first, then compares. Pressing a control turns on every control, on every phone, that is sending that same channel and note, and the last release turns them all off. On one phone a pad and every key sending that note light together, as when C4 is held and the pad and both keyboards show it. A note that no other control is sending just plays. A phone whose shift or offset moves a pad onto a different channel or note leaves that pad dark.
 
 A phone that leaves must silence only the notes it turned on, and only those pads turn off. Today one release sends all-notes-off for the whole port, which would cut the other players and darken their pads. The server has to remember which phone holds which notes.
 
 ## Layouts on the Mac
 
-Decks and MIDI layouts can be saved on the computer, beside the JSON file a deck can already download or upload. The store is one SQLite file on that Mac. The Node server uses it now. The menu-bar app opens the same file later. There is no account and no database server. Each saved layout is the JSON the phone already stores, plus a name and a time. The copy on the Mac is the unshifted layout.
+Decks and MIDI layouts can be saved on the computer, beside the JSON file a deck can already download or upload. The store is a folder of JSON files on that Mac. The Node server reads and writes it now. The menu-bar app opens the same folder later. There is no account and no database server. Each saved layout is the JSON the phone already stores, plus a name and a time. The copy on the Mac is the unshifted layout.
+
+The folder sits in the config directory. `$GC_CONFIG_DIR` replaces `~/.config/ground-control` when it is set.
+
+```text
+~/.config/ground-control/
+  config.json
+  token
+  decks/                  # existing overrides of built-ins
+  library/
+    decks/<name>.json
+    midi/<name>.json
+```
+
+`decks/` and `library/` do different jobs. A file in `decks/` replaces the built-in the server serves for that app. A file in `library/` is a named copy a phone loads.
+
+The filename is the layout name. Two layouts in the same folder cannot share a name, and two MIDI layouts on one phone cannot either. A rename onto a taken name is refused. "Taken" ignores case, because the Mac volume treats `Keys.json` and `keys.json` as one file. A name containing `/`, or a name that is empty, `.`, or `..`, is refused. A rename writes the new file and removes the old one. A change of case only rewrites the name inside the file that is already there.
+
+There is no id in the file. The layout id on the phone is local: it picks which layout is open. Share → Download already leaves button ids out of a deck file on purpose. A phone that loads a library file assigns its own layout id and does not read one from the file. Deck buttons and MIDI widgets get new ids on that phone, the same way Share → Upload works today.
+
+Lighting does not use an id. Each phone applies its channel shift and octave offset, and every control that is then sending the same channel and note lights together, on that phone and on the others. A CC matches after the channel shift, on channel and CC number. A slider array and a toggle group count forward from the first CC, so each step has its own. An XY pad has one CC per axis. Pitch bend matches on the channel after the shift. Transport matches on the command. A label or a tab capsule sends nothing, so it has nothing to match and travels only as part of the saved grid. A synced update keeps a control's value by that sounding channel and note or CC, then the phone assigns local ids for editing.
+
+```json
+{
+  "kind": "midi",
+  "name": "Keys",
+  "updatedAt": "2026-10-12T18:00:00.000Z",
+  "rev": 3,
+  "created": {
+    "at": "2026-10-12T18:00:00.000Z",
+    "device": "Studio iPhone",
+    "screen": { "w": 390, "h": 844, "dpr": 3 }
+  },
+  "layout": {}
+}
+```
+
+`kind` is `deck` or `midi`. `layout` is the phone's grid with channel and octave left out. The server stamps `updatedAt` and `rev` when it accepts a save. `created` is written on the first save and kept after that. `device` is the name of the phone that first saved the layout. The server reads it from the connection: the Bonjour name of that address on the LAN, which is the name set in Settings, or the Tailscale machine name when the phone is on the tailnet. When the lookup returns nothing, the server keeps the coarse label the phone sends with `hello` (`iPhone`, `iPad`, `Android`, `Mac browser`, or `Browser`). `screen` comes from the phone: the CSS pixel size of the page and the device pixel ratio, which is the space the grid was built in. The server writes `<name>.json.tmp` and renames that over the real file. The Node process is the only writer, and it handles one save at a time, so two phones editing one layout still end with one complete grid: the save that arrived second. Saving under a name the library already has warns that the name is in use, and replaces that layout only after the warning is confirmed. Cancelling leaves the file as it is. There is no index file. Listing the directory and reading each file is enough. A file that does not parse is skipped.
+
+Pad lights, held modifiers, and which phone has opted in stay out of these files. Those are session state and phone state.
 
 **Load** copies it onto the phone. That copy is private until the phone opts in.
 
-**Keep synchronized** is that option, per layout. The grid on every phone that opted in is the same grid. Add a pad on one and it appears on the others. The same widget turns on and off together. Two phones editing at once: the later save is the one stored.
+**Keep synchronized** is that option, per layout. The grid on every phone that opted in is the same grid. Add a pad on one and it appears on the others. Two phones editing at once: the later save is the one stored. Lighting stays the sounding channel and note, after each phone's own shift and offset.
 
 The grid is what syncs. Channel and octave belong to the phone, not to the copy on the Mac. Two phones can play the same pads and send different notes. Neither phone's channel or octave is written back.
 
@@ -84,8 +123,8 @@ Idle follows the same split. The trackpad phone going quiet gives the pointer ba
 - **The Mac's own mouse still ignores a phone's ⌘.** Shared modifiers are on keys and on clicks Ground Control posts. A click from the Mac's trackpad is stamped by the physical keyboard. Command-click in Max keeps working from the phone's trackpad, and keeps failing from the Mac's mouse. This plan does not change that.
 - **Text drafts stay on the phone.** A synced deck or MIDI layout shares the grid. An unsent text draft does not.
 - **The offset and a hand edit should not both apply.** Adding an octave on top of a channel someone already set by hand is easy to misread. Each synced layout on a phone is either shifted by that phone's offset or set by hand.
-- **Same widget and same note can disagree** once an octave offset is on. The synced layout lights the widget. The note rule lights whatever pad is actually sounding that note. A phone shifted up an octave will light its C5 pad when the other phone plays C5, and will also light the same pad the other phone pressed, which on the shifted phone may be sounding C6.
-- **Faders and knobs are not on/off.** On a synced layout the same fader exists on every phone, so its position can move together. That is part of keeping the layout synchronized. Two private layouts still have no twin fader to move.
+- **A shifted phone lights the note it is sending.** Channel shift and octave offset are applied before the comparison. A phone at +1 octave does not light its C5 pad when another phone plays C4. It lights the control that is sending C4 on that channel. Two controls that send the same pair both light, including a pad and a key on another phone.
+- **Faders and knobs are not on/off.** After the channel shift, the fader on that channel and CC moves together on every phone. Two private layouts still have no twin fader to move unless they are sending that same pair.
 
 ## Milestones
 
@@ -93,6 +132,6 @@ Idle follows the same split. The trackpad phone going quiet gives the pointer ba
 
 2. **Mirror the modifier chips.** One on/off value per modifier, pushed to every client, so a press on one phone turns that chip on everywhere and a release turns it off everywhere. Latched clears on the next key from any phone or the next mouse-up from the trackpad phone. Locked stays until a tap. Toggle-held keys use the same on/off.
 
-3. **MIDI pads for the same note.** Pressing a note on one phone turns that pad on on every phone that has it, and the last release turns them all off. Notes are remembered per phone so one disconnect silences and darkens only that phone's notes. Transport from any phone is last-writer-wins. Faders and knobs on private layouts wait.
+3. **MIDI pads for the same sounding note.** Each phone applies its channel shift and octave offset first. Pressing a control turns on every control, on every phone, that is sending that same channel and note, and the last release turns them all off. Notes are remembered per phone so one disconnect silences and darkens only that phone's notes. Transport from any phone is last-writer-wins. Faders and knobs follow the same rule after the channel shift: same channel and CC.
 
-4. **Layouts on the Mac.** SQLite on the computer. Save and load from the share sheet, for decks and MIDI layouts. Keep synchronized is optional per layout. Channel and octave stay on the phone: set by hand per layout, or by one offset applied to every MIDI layout that phone keeps synchronized. Neither is written into the stored copy.
+4. **Layouts on the Mac.** A `library/` folder of JSON files under the config directory, each file named by the layout name, as above. Save and load from the share sheet, for decks and MIDI layouts. Keep synchronized is optional per layout. Channel and octave stay on the phone: set by hand per layout, or by one offset applied to every MIDI layout that phone keeps synchronized. Neither is written into the stored copy.

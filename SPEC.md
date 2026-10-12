@@ -398,6 +398,7 @@ Errors from the helper carry `ref: <request type>`.
 - `config.json`: port, sensitivity, acceleration, cursor mode (`system`/`off`) and scale, cursor timeout, idle timeout, MIDI source name, `zoom` tuning (§6.8)
 - `decks/*.json`: user decks (override / extend built-ins by bundle ID)
 - `cursor-restore.json`: pre-session cursor scale (crash recovery)
+- `library/decks/<name>.json`, `library/midi/<name>.json`: planned saved layouts, one JSON file per deck or MIDI layout, filename is the unique layout name. Not built. See [docs/multi-client.md](docs/multi-client.md). Distinct from `decks/`.
 
 ---
 

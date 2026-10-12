@@ -9,6 +9,8 @@ JSON button grids (SPEC §6.2). The server loads these at startup. The system de
 
 A user file replaces a built-in when they share the same `id` or the same non-null `bundleId`. Built-ins win only when no user file matches that key.
 
+Saved phone decks and MIDI layouts are a different folder, `library/` under the same config directory. That store is planned in [docs/multi-client.md](../docs/multi-client.md) and is not built. The filename is the layout name, and two files in that folder cannot share one. A file there is a named copy a phone loads. It does not replace a built-in.
+
 ## Deck shape
 
 ```json
