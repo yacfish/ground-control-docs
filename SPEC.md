@@ -127,7 +127,7 @@ Each phone releases only what it holds:
 
 1. The trackpad phone: every **held mouse button**, drag lock, and the **cursor** back to its pre-session size. A motion zoom returns to the button level.
 2. Whichever phone latched or locked a modifier, or is holding a key: **those keys**. A key another phone is also holding stays down.
-3. Whichever phone started a MIDI note: **those notes**. A note another phone is also holding stays on.
+3. Whichever phone started a MIDI note: **those notes**. A note another phone is also holding stays on. Every phone is told which notes are still down, so the pads that send that channel and note light together and go dark on the last release.
 
 The last phone to leave, and a phone that is alone, runs the full helper release (`session.release`): buttons, keys, modifiers, cursor and all-notes-off. While another phone is connected the helper gets `session.releasePointer` instead: mouse buttons, cursor and a motion zoom, and not that other phone's keys or notes. Server shutdown does the same. `session.state` carries `keysReleased: true` when this phone's keys were lifted. That clears this phone's deck toggles. Modifier chips follow the shared `mods` message, including after the trackpad is given up.
 
@@ -213,6 +213,7 @@ All surfaces share the same socket and session. Bottom tab bar on the phone: **T
   - `midi.cc {ch, cc, value}`: `cc`/`value` 0–127
   - `midi.pitch {ch, value}`: 14-bit pitch bend 0–16383 (centre 8192)
   - `midi.transport {cmd}`: optional system realtime `start` / `stop` / `continue` (beyond the core three; same ownership rules)
+- The phone already sends the channel and the note after its channel and its octave. The server remembers which phone holds each note and tells every phone (`midi`). A control lights when it is sending a note that is down on that channel. The last phone to release it turns every copy off. One phone leaving silences only the notes nobody else is holding. A CC moves every fader, knob, slider, XY axis, toggle and radio on that same channel and CC. Pitch bend matches on the channel. Transport shows the last command from any phone.
 - All-notes-off on release (§4): helper lifts tracked notes and sends CC 123 / 120.
 - Later: a virtual destination, so the Mac can light pads and move faders on the phone.
 
@@ -348,6 +349,7 @@ JSON text frames, one message per frame. Every message has `t` (type). Client→
 | `session.revoked` | `{byDevice}` |
 | `mods` | `{cmd, opt, ctrl, shift, fn}` | shared chips, each `off`/`latched`/`locked`. Sent on connect and whenever they change |
 | `holds` | `{keys}` | keys held with `key.down`. Sent on connect and whenever the set changes |
+| `midi` | `{notes?, cc?, pitch?, transport?, ccs?, pitches?}` | sounding notes `{ch, note}[]`, one CC or pitch, or the last transport command. A full list arrives on connect |
 | `focus.changed` | `{bundleId, name, pid}` |
 | `apps` | `{apps: [{bundleId, name, pid, active, hidden, path, iconId}]}`: reply to `apps.list`, and broadcast on launch/quit/hide/activate |
 | `dock` | `{apps: [DockItem], others: [DockItem], recents: [DockItem], showRecents}` with `DockItem = {id, kind: "app"\|"folder"\|"file"\|"url", name, bundleId?, path?, url?, iconId?, running?, missing?}` |
