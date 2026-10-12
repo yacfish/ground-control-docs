@@ -339,6 +339,9 @@ JSON text frames, one message per frame. Every message has `t` (type). Client→
 | `zoom.set` | `{level: 1\|2\|4}` | zoom preset (§6.8); owner only (implicit engage); `bad_request` for other levels, `unsupported` with a pre-0.7.0 helper |
 | `prefs.set` | `{pointerSpeed?, acceleration?, cursorScale?, cursorTimeout?, autoKeys?, invertScroll?}` | per-phone Preferences (§6.7), any client; sent after every `welcome`; `null` resets a field to the server default |
 | `menu.invoke` | `{path: [...], id?, pid?}` | AXPress only; never AppleScript or coordinates; any phone; `pid` from the `menu` reply; refused with `stale_menu` if another app is now in front |
+| `library.list` | `{kind: "deck"\|"midi"}` | names saved on this Mac |
+| `library.load` | `{kind, name, apply?: "copy"\|"refresh"}` | one layout. `copy` is a private load. `refresh` is for a layout this phone keeps synchronized |
+| `library.save` | `{kind, name, previousName?, replace?, screen?, layout}` | writes `library/<kind>/<name>.json`. `replace` confirms a name that is already there. Channel, octave and ids are left out |
 
 ### Server → client
 | `t` | Payload |
@@ -350,6 +353,8 @@ JSON text frames, one message per frame. Every message has `t` (type). Client→
 | `mods` | `{cmd, opt, ctrl, shift, fn}` | shared chips, each `off`/`latched`/`locked`. Sent on connect and whenever they change |
 | `holds` | `{keys}` | keys held with `key.down`. Sent on connect and whenever the set changes |
 | `midi` | `{notes?, cc?, pitch?, transport?, ccs?, pitches?}` | sounding notes `{ch, note}[]`, one CC or pitch, or the last transport command. A full list arrives on connect |
+| `library.list` | `{kind, items: [{name, updatedAt, rev, created}]}` |
+| `library.layout` | `{kind, name, previousName?, updatedAt, rev, created, layout, apply?}` | a save reaches every phone. A load reaches the phone that asked |
 | `focus.changed` | `{bundleId, name, pid}` |
 | `apps` | `{apps: [{bundleId, name, pid, active, hidden, path, iconId}]}`: reply to `apps.list`, and broadcast on launch/quit/hide/activate |
 | `dock` | `{apps: [DockItem], others: [DockItem], recents: [DockItem], showRecents}` with `DockItem = {id, kind: "app"\|"folder"\|"file"\|"url", name, bundleId?, path?, url?, iconId?, running?, missing?}` |
@@ -407,7 +412,7 @@ Errors from the helper carry `ref: <request type>`.
 - `config.json`: port, sensitivity, acceleration, cursor mode (`system`/`off`) and scale, cursor timeout, idle timeout, MIDI source name, `zoom` tuning (§6.8)
 - `decks/*.json`: user decks (override / extend built-ins by bundle ID)
 - `cursor-restore.json`: pre-session cursor scale (crash recovery)
-- `library/decks/<name>.json`, `library/midi/<name>.json`: planned saved layouts, one JSON file per deck or MIDI layout, filename is the unique layout name. Not built. See [docs/multi-client.md](docs/multi-client.md). Distinct from `decks/`.
+- `library/decks/<name>.json`, `library/midi/<name>.json`: saved layouts, one JSON file per deck or MIDI layout. The filename is the unique layout name. The phone saves and loads them from the share sheet. See [docs/multi-client.md](docs/multi-client.md). Distinct from `decks/`.
 
 ---
 
