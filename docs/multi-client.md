@@ -1,6 +1,6 @@
 # Several clients at once
 
-Milestone 1 is the current behavior. Only the trackpad is exclusive. A second phone can type, hold keys, run a deck button, press a menu, launch an app and play MIDI while someone else holds the pointer. Take over moves the trackpad and leaves everyone else's keys and notes down. One phone alone still engages on the first key or note. That session releases immediately, and also when the phone leaves, locks, or disconnects. The Trackpad tab does not time out. The rest of this document is still a plan.
+Milestones 1 and 2 are the current behavior. Only the trackpad is exclusive. Modifier chips are shared, and a deck key held down shows held on the other phones. A second phone can type, hold keys, run a deck button, press a menu, launch an app and play MIDI while someone else holds the pointer. Take over moves the trackpad and leaves everyone else's keys and notes down. One phone alone still engages on the first key or note. That session releases immediately, and also when the phone leaves, locks, or disconnects. A modifier or a toggled key that is still down stays down until it is released. The Trackpad tab does not time out. MIDI lighting and the layout library are still a plan.
 
 ## Who owns what
 
@@ -21,10 +21,10 @@ The chips are ⌘ ⌥ ⌃ ⇧ fn. These are the modifier keys. F1–12 are not p
 Each chip is one control, the same way a MIDI note is one control. Press ⌘ on one phone and that chip turns on everywhere it appears: the Keys tab and the trackpad row, on every connected phone. Release it and every copy turns off at the same time. Latched and locked are both "on". Locked is the hold that stays until a tap. The screens do not disagree.
 
 - A short tap latches the modifier. The next key from any phone, or the next mouse-up from the trackpad phone, releases it, and every chip goes off.
-- A hold of about half a second locks it until any phone taps it again. ⌘E from the keys phone and then a click from the trackpad phone both see that ⌘, and both phones show it on.
+- A hold of 0.8 s locks it until any phone taps it again. The chip fills and grows 3px on every side as soon as that time is reached, while the finger is still down, then returns to its normal size when the finger lifts. The chips around it stay put. A chip that is already locked turns off when the finger lifts. ⌘E from the keys phone and then a click from the trackpad phone both see that ⌘, and both phones show it on.
 - The server remembers which phone turned each modifier on. That phone leaving, locking, going idle, or disconnecting lifts only what it turned on. The other phones' chips turn off with it.
 
-Toggle-mode keys on Keys and on a deck are the same kind of hold. An arrow held on one phone shows held on the others, and any phone can release it.
+Toggle-mode keys on a deck are holds (`key.down` / `key.up`). An arrow held that way shows held on the other phones, including the matching arrow on Keys, and any phone can release it. Holding an arrow on the Keys tab auto-repeats as key presses. That press stays on the phone that is touching it.
 
 ## No mouse actions on the deck
 
@@ -108,7 +108,7 @@ Each phone releases only what it holds:
 
 Someone else's holds stay down. The last phone to leave still runs the full release, so nothing can stick after the room is empty.
 
-Idle does not give the trackpad up. The phone that has the Trackpad tab open keeps the pointer, including its enlarged cursor, until it leaves that tab, locks, or disconnects. A one-phone session started from keys, text, a deck, or MIDI releases immediately (`idleMs` is 0). A heartbeat does not count as activity.
+Idle does not give the trackpad up. The phone that has the Trackpad tab open keeps the pointer, including its enlarged cursor, until it leaves that tab, locks, or disconnects. A one-phone session started from keys, text, a deck, or MIDI releases immediately (`idleMs` is 0). A modifier or a toggled key that is still down stays down, and that session releases once it is up. A heartbeat does not count as activity.
 
 ## Doubts
 
@@ -128,7 +128,7 @@ Idle does not give the trackpad up. The phone that has the Trackpad tab open kee
 
 1. **Split the session.** Done. The server distinguishes the trackpad holder from everyone else. Keys, text, deck buttons that do not click, menus, app actions, and MIDI are accepted from any connected phone. Take over applies to the trackpad only. Release is per phone, as above. One connected phone behaves as it does now. SPEC §4 matches the code.
 
-2. **Mirror the modifier chips.** One on/off value per modifier, pushed to every client, so a press on one phone turns that chip on everywhere and a release turns it off everywhere. Latched clears on the next key from any phone or the next mouse-up from the trackpad phone. Locked stays until a tap. Toggle-held keys use the same on/off.
+2. **Mirror the modifier chips.** Done. One value per modifier is pushed to every client. A press on one phone turns that chip on everywhere and a release turns it off everywhere. Latched clears on the next key from any phone or the next mouse-up from the trackpad phone. Locked stays until a tap. A deck toggle (`key.down`) shows held on the other phones, and any phone can release it. SPEC §6.1 matches the code.
 
 3. **MIDI pads for the same sounding note.** Each phone applies its channel shift and octave offset first. Pressing a control turns on every control, on every phone, that is sending that same channel and note, and the last release turns them all off. Notes are remembered per phone so one disconnect silences and darkens only that phone's notes. Transport from any phone is last-writer-wins. Faders and knobs follow the same rule after the channel shift: same channel and CC.
 

@@ -119,7 +119,7 @@ Keys, text, deck buttons, menu presses, app actions and MIDI are accepted from a
 - `session.engage`: claims the trackpad when it is free. Server marks this client as owner and **grows the cursor** (§5). If another phone holds it, the claim is refused and the phone is told who does. A claim from the Trackpad tab does not time out.
 - `session.takeover`: claims it anyway. The previous phone loses the pointer only.
 - `session.release`: this phone gives up what it holds. The trackpad phone also gives up the pointer. Leaving the Trackpad tab sends this.
-- **Idle**: `idleMs` is 0. It does not give the trackpad up. The phone that has the Trackpad tab open keeps it. A one-phone session started from a key, text, deck, or MIDI action releases as soon as that action is sent.
+- **Idle**: `idleMs` is 0. It does not give the trackpad up. The phone that has the Trackpad tab open keeps it. A one-phone session started from a key, text, deck, or MIDI action releases as soon as that action is sent. A latched or locked modifier, or a toggled key, stays down until it is released. That one-phone session releases once nothing is held.
 - **Socket drop**: heartbeat missing for 10 s, or socket closes ⇒ that phone's release.
 
 ### Release
@@ -129,7 +129,7 @@ Each phone releases only what it holds:
 2. Whichever phone latched or locked a modifier, or is holding a key: **those keys**. A key another phone is also holding stays down.
 3. Whichever phone started a MIDI note: **those notes**. A note another phone is also holding stays on.
 
-The last phone to leave, and a phone that is alone, runs the full helper release (`session.release`): buttons, keys, modifiers, cursor and all-notes-off. While another phone is connected the helper gets `session.releasePointer` instead: mouse buttons, cursor and a motion zoom, and not that other phone's keys or notes. Server shutdown does the same. `session.state` carries `keysReleased: true` when this phone's keys were lifted, so its chips clear. Losing the trackpad does not.
+The last phone to leave, and a phone that is alone, runs the full helper release (`session.release`): buttons, keys, modifiers, cursor and all-notes-off. While another phone is connected the helper gets `session.releasePointer` instead: mouse buttons, cursor and a motion zoom, and not that other phone's keys or notes. Server shutdown does the same. `session.state` carries `keysReleased: true` when this phone's keys were lifted. That clears this phone's deck toggles. Modifier chips follow the shared `mods` message, including after the trackpad is given up.
 
 ### Heartbeat
 Client sends `ping` every 3 s; server replies `pong`. Server considers the client gone after 10 s of silence. The client reconnects with exponential backoff and re-sends `hello`; the session must be re-engaged (never auto-resumed with held keys).
@@ -165,11 +165,11 @@ All surfaces share the same socket and session. Bottom tab bar on the phone: **T
 - Special-keys row: Esc, Tab, ⏎, ⌫, ⌦, arrows, Home/End, PgUp/PgDn, Space; a media row (play/pause, previous/next, volume, mute, brightness) with an **F1–12** toggle that shows the function keys.
 - Order: esc ↑ ⏎ ⌫ ⌦ ← ↓ → ⇥ home end pg↑ pg↓ space (`SPECIAL_KEYS` in `src/keysModel.js`).
 - ⌫ and the four arrows auto-repeat while held: one press on press-down, repeating from 500 ms, interval 300 ms shrinking linearly to 100 ms over the first 1.5 s of repeating, then 100 ms (`repeatInterval`). Each repeat is the same `key.press` as a tap, with the modifiers active at press-down (latched ones turn off once). Stops on release, pointer cancel / leave / lost capture, tab switch, window blur, page hidden, or disconnect. Pointer events with capture; pointerdown / mousedown are cancelled so the type field keeps focus. The phone keyboard's own Backspace keeps its native repeat.
-- **Sticky modifiers** ⌘ ⌥ ⌃ ⇧ (and fn):
-  - tap once ⇒ *latched* for the next key, then auto-releases;
-  - double-tap ⇒ *locked* until tapped again;
-  - visual state on each modifier chip (off / latched / locked).
-  - Modifiers are always released on session release (§4).
+- **Sticky modifiers** ⌘ ⌥ ⌃ ⇧ and fn are one shared set. F1–12 stay ordinary keys.
+  - A tap on any phone turns that chip on (*latched*) on every phone, on the Keys tab and on the trackpad row. Holding the chip for 0.8 s (`MOD_LOCK_MS`) *locks* it. The chip fills and grows 3px on every side while the finger is still down, then returns to its normal size when the finger lifts. The chips around it stay put. A tap on a chip that is already locked turns it off when the finger lifts. Holding that chip does not start the lock timer again.
+  - The next key from any phone, or the next mouse-up from the trackpad phone, releases latched chips. The key or click reaches the Mac while the latch is still down, and the latch then clears on every phone. Locked chips stay until any phone taps them.
+  - The phone sends `mods.set` with only the keys that changed. The server tells every phone the full set (`mods`) and sends the helper a full `mods.set`. It remembers which phone turned each modifier on. That phone leaving lifts those modifiers on every phone.
+  - A full session release clears every modifier (§4). Giving up the trackpad leaves them as they are.
 - Echo, Return and IME handling: §6.6.
 
 **Text**
@@ -185,7 +185,7 @@ All surfaces share the same socket and session. Bottom tab bar on the phone: **T
 - Built-in decks are JSON in `decks/`, overridable by `~/.config/ground-control/decks/` when `id` or `bundleId` matches. Until the phone edits an app's deck, those buttons are what show, laid out on the grid. After an edit, that deck is stored on the phone (`gc_app_decks_v1`) and the built-in is only the starting copy. The system grid always comes from the server. Share downloads or uploads the phone's copy as JSON.
 - **Editable app deck**, the MIDI gestures on a fixed grid. Cells are 50×50, and a button has its own width and height in cells. **Edit** moves, adds, and removes; a press does nothing while editing. Drag moves a button, the corner control copies it, and the title trash deletes it. Dragging a button off the right edge opens the next page when one does not exist yet, and only while another button remains on the page being left. An emptied page collapses forward. More than one page shows a row of dots and a swipe; one page has no dots. Editor kinds: Menu, Key, Extra Keys, Text, Controls, Label. A menu label set to Auto follows that item's title, including when exactly one title in that menu is replaced by one new title and the neighbors match. Sleep / shut down on a built-in button keep the confirm sheet.
 - **Controls** opens the front window's Accessibility controls (buttons, sliders, checks, text fields, steppers), grouped by the containers the app names. `window.controls` lists them; `window.press` and `window.set` act on a path of child indexes. A slider follows the finger.
-- **Key** and **Extra Keys** can turn on **Toggle mode**. The first tap sends `key.down` (with the button’s modifiers) and the button fills. The second tap sends `key.up`. After a 500 ms wait, a non-modifier key repeats as further `key.down` events with `repeat: true` until that second tap. Modifiers stay down and do not repeat. Media keys step with `key.press` on each repeat. A long press still opens the button settings. A click, a scroll step, and screen zoom stay on the Trackpad (§6.8). An app’s own zoom is a menu action when that app offers one. Hide, quit, launch, and opening a Dock item stay on the Apps tab (§6.4). MIDI stays on the MIDI tab (§6.3).
+- **Key** and **Extra Keys** can turn on **Toggle mode**. The first tap sends `key.down` (with the button’s modifiers) and the button fills. The second tap sends `key.up`. The same key shows held on the other phones (the deck button, and the matching arrow on Keys). Any phone can release it. After a 500 ms wait, a non-modifier key repeats as further `key.down` events with `repeat: true` until that second tap. Modifiers stay down and do not repeat. Media keys step with `key.press` on each repeat. A long press still opens the button settings. A click, a scroll step, and screen zoom stay on the Trackpad (§6.8). An app’s own zoom is a menu action when that app offers one. Hide, quit, launch, and opening a Dock item stay on the Apps tab (§6.4). MIDI stays on the MIDI tab (§6.3).
 - Built-in decks:
 
   | Deck | `bundleId` | Buttons |
@@ -323,8 +323,8 @@ JSON text frames, one message per frame. Every message has `t` (type). Client→
 | `pointer.scroll` | `{dx, dy}` | pixel deltas |
 | `key.text` | `{text}` | posted as Unicode |
 | `key.press` | `{key, mods: [...]}` | named key with modifiers, e.g. `{key:"tab", mods:["cmd"]}` |
-| `key.down` / `key.up` | `{key}` | for holds |
-| `mods.set` | `{cmd, opt, ctrl, shift, fn}` | sticky-modifier state (each `off`/`latched`/`locked`) |
+| `key.down` / `key.up` | `{key, mods?}` | holds. `mods` are the modifiers that went down with the key. A `key.up` from any phone releases that hold |
+| `mods.set` | `{cmd?, opt?, ctrl?, shift?, fn?}` | only included keys change (`off`/`latched`/`locked`). The server sends the helper every key |
 | `deck.run` | `{deckId, buttonId, confirmed?}` | server resolves to action; `confirmed: true` required for sleep / shutdown / `confirm:true` buttons |
 | `midi.note` / `midi.cc` / `midi.pitch` / `midi.transport` | see §6.3 | |
 | `apps.list` | `{}` | running apps (§6.4.1) |
@@ -344,8 +344,10 @@ JSON text frames, one message per frame. Every message has `t` (type). Client→
 |---|---|
 | `welcome` | `{serverVersion, owner: bool, settings}` |
 | `pong` | `{}` |
-| `session.state` | `{engaged, owner, ownerDevice, reason?, keysReleased?}` | `keysReleased` means this phone's keys were lifted |
+| `session.state` | `{engaged, owner, ownerDevice, reason?, keysReleased?}` | `keysReleased` means this phone's keys were lifted. Deck toggles clear. Modifier chips follow `mods` |
 | `session.revoked` | `{byDevice}` |
+| `mods` | `{cmd, opt, ctrl, shift, fn}` | shared chips, each `off`/`latched`/`locked`. Sent on connect and whenever they change |
+| `holds` | `{keys}` | keys held with `key.down`. Sent on connect and whenever the set changes |
 | `focus.changed` | `{bundleId, name, pid}` |
 | `apps` | `{apps: [{bundleId, name, pid, active, hidden, path, iconId}]}`: reply to `apps.list`, and broadcast on launch/quit/hide/activate |
 | `dock` | `{apps: [DockItem], others: [DockItem], recents: [DockItem], showRecents}` with `DockItem = {id, kind: "app"\|"folder"\|"file"\|"url", name, bundleId?, path?, url?, iconId?, running?, missing?}` |
