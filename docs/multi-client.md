@@ -1,8 +1,6 @@
 # Several clients at once
 
-This is a plan, not the current behavior. SPEC §4 still says one client controls the Mac. A second phone connects, sees "In use by …", and has to take over, which drops the first phone's held keys, mouse buttons, and MIDI notes.
-
-The split below is the one to build. One phone alone should keep working as it does today.
+Milestone 1 is the current behavior. Only the trackpad is exclusive. A second phone can type, hold keys, run a deck button, press a menu, launch an app and play MIDI while someone else holds the pointer. Take over moves the trackpad and leaves everyone else's keys and notes down. One phone alone still engages on the first key or note. That session releases immediately, and also when the phone leaves, locks, or disconnects. The Trackpad tab does not time out. The rest of this document is still a plan.
 
 ## Who owns what
 
@@ -110,11 +108,11 @@ Each phone releases only what it holds:
 
 Someone else's holds stay down. The last phone to leave still runs the full release, so nothing can stick after the room is empty.
 
-Idle follows the same split. The trackpad phone going quiet gives the pointer back and shrinks the cursor. It does not lift a chord locked on the keys phone. A heartbeat still does not count as activity.
+Idle does not give the trackpad up. The phone that has the Trackpad tab open keeps the pointer, including its enlarged cursor, until it leaves that tab, locks, or disconnects. A one-phone session started from keys, text, a deck, or MIDI releases immediately (`idleMs` is 0). A heartbeat does not count as activity.
 
 ## Doubts
 
-- **Opening the Trackpad tab claims the pointer**, even before a finger is down. A phone left on that tab holds it until idle, background, or Release. Background already ends a session today. The same rule should give the trackpad up, or the other phones have to take over from a phone nobody is touching.
+- **Opening the Trackpad tab claims the pointer**, even before a finger is down. A phone left on that tab holds it until it leaves the tab, the phone locks, or it disconnects. Idle does not give it up. Background already ends a session today.
 - **A shared ⌘ is one chord, not two.** The chips match because they are one control. If the keys phone latches ⌘ and another phone immediately sends a shortcut, the latch is spent and every chip goes off. Two people who wanted independent modifiers will step on each other. That is the cost of turning on and off together.
 - **A locked modifier's owner is the phone that locked it.** Another phone sees it and can tap to release it. If the owner disconnects, the lock lifts even though the other phones were still showing it. The alternative is to keep the lock until an explicit tap, which leaves ⌘ down after a dead phone.
 - **Menu and Apps actions stay live** while someone is on the trackpad. They do not click, but they do change the frontmost app, so the trackpad phone's target moves. The focus broadcast already tells that phone. Graying them was considered and left out.
@@ -128,7 +126,7 @@ Idle follows the same split. The trackpad phone going quiet gives the pointer ba
 
 ## Milestones
 
-1. **Split the session.** The server distinguishes the trackpad holder from everyone else. Keys, text, deck buttons that do not click, menus, app actions, and MIDI are accepted from any connected phone. Take over applies to the trackpad only. Release is per phone, as above. One connected phone behaves as it does now. SPEC §4 is updated in this milestone so the code and the spec match.
+1. **Split the session.** Done. The server distinguishes the trackpad holder from everyone else. Keys, text, deck buttons that do not click, menus, app actions, and MIDI are accepted from any connected phone. Take over applies to the trackpad only. Release is per phone, as above. One connected phone behaves as it does now. SPEC §4 matches the code.
 
 2. **Mirror the modifier chips.** One on/off value per modifier, pushed to every client, so a press on one phone turns that chip on everywhere and a release turns it off everywhere. Latched clears on the next key from any phone or the next mouse-up from the trackpad phone. Locked stays until a tap. Toggle-held keys use the same on/off.
 

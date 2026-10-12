@@ -60,7 +60,7 @@ npm run build          # React client → public/
 npm start              # server on :8788
 ```
 
-`npm start` prints a QR code for each LAN address, and another for the Tailscale address when the Mac is on a tailnet. The line above each code names the interface and the address (`192.168.1.20` and so on). Scan one with the phone camera; the code opens `http://<address>:8788/?k=<token>`. The MagicDNS address stays as text: `http://<mac>.<tailnet>.ts.net:8788/?k=<token>`. Open one on your phone. In the browser the page leaves `?k=` in the address and shows a banner: add it to the Home Screen before dismissing, so the shortcut keeps the pairing link. The Home Screen web app hides that banner and removes `?k=` from the visit; the icon's saved address stays as it was. The token is stored in `~/.config/ground-control/token` (mode 0600); delete that file to rotate it.
+`npm start` prints a clickable link for this Mac (`http://127.0.0.1:8788/?k=<token>`), then a QR code for each LAN address and another for the Tailscale address when the Mac is on a tailnet. The line above each code names the interface and the address (`192.168.1.20` and so on). Click the link to open the page in the browser on this Mac. Scan a code with the phone camera; the code opens `http://<address>:8788/?k=<token>`. The MagicDNS address stays as text: `http://<mac>.<tailnet>.ts.net:8788/?k=<token>`. Open one on your phone. In the browser the page leaves `?k=` in the address and shows a banner: add it to the Home Screen before dismissing, so the shortcut keeps the pairing link. The Home Screen web app hides that banner and removes `?k=` from the visit; the icon's saved address stays as it was. The token is stored in `~/.config/ground-control/token` (mode 0600); delete that file to rotate it.
 
 After `git pull`: run `npm run build` (client) and, when helper sources changed, `npm run build:helper`, then restart `npm start`. The server logs the helper version on start and logs once when a feature needs a newer helper.
 
@@ -92,14 +92,14 @@ Open `http://<mac-ip>:5173/?k=<token>` on the phone during dev. Without a helper
 ### Configuration
 Optional `~/.config/ground-control/config.json`:
 ```json
-{ "port": 8788, "sensitivity": 1.0, "acceleration": 0.6, "cursorMode": "system", "cursorScale": 3, "cursorTimeoutMs": 0, "idleMs": 20000,
+{ "port": 8788, "sensitivity": 1.0, "acceleration": 0.6, "cursorMode": "system", "cursorScale": 3, "cursorTimeoutMs": 0, "idleMs": 0,
   "midiSourceName": "Ground Control",
   "zoom": { "method": "auto", "keySteps2x": 4, "keySteps4x": 8, "keyOut": 20, "units2x": 1000, "units4x": 2000, "out": 4000, "motionIdleMs": 500 } }
 ```
 - `PORT` env overrides the port.
 - `sensitivity` is a relative multiplier on top of a built-in 2.5x base pointer gain (`POINTER_BASE_GAIN` in `server/session.js`), so `1.0` is the default speed. `acceleration` is the default curve (0 = linear); each phone can override both in Preferences.
 - `cursorMode`: `system` (grow the real cursor while engaged) or `off`. `cursorScale` is the default engage size (1 to 4). `cursorTimeoutMs` is the default cursor timeout (0 = Until I stop driving).
-- `idleMs`: no input for this long releases the session (default 20 s).
+- `idleMs`: 0. A one-phone session started from keys, text, a deck, or MIDI releases as soon as that action is sent. It does not take the trackpad away while that tab is open.
 - `midiSourceName`: name of the CoreMIDI virtual source.
 - `zoom` picks and tunes the Trackpad 1X / 2X / 4X method (see below): `method` (`auto` / `private` / `keys` / `scroll`), `keySteps2x` / `keySteps4x` / `keyOut` / `keyGapMs` for `keys`, `units2x` / `units4x` / `out` / `scrollUnits` / `scrollTap` / `continuous` / `suppress` for `scroll`, `smooth` for `private`, `motionIdleMs` (default 500) for Zoom during motion. Step counts are guesses until tuned on a Mac.
 
@@ -126,7 +126,7 @@ Optional `~/.config/ground-control/config.json`:
   - pressing a button while motion-zoomed: a level at or above the motion level replaces the motion zoom; a lower one is remembered and applied when motion ends (no zoom out while you move);
   - Release, disconnect, the idle timeout and sending text drop only this extra zoom, back to the 1X / 2X / 4X button level. Stopping `npm start` puts the private zoom back to 1x. Needs helper 0.8.2 and the private zoom call (with an older helper the setting does nothing and the server logs a rebuild hint once).
 
-**Zoom timeout** (Preferences, under Zoom during motion: **Off** / **300s** / **60s** / **15s**, 60s by default). Confirmed on this Mac: a 2X or 4X button level returns to 1X that long after the phone sits still. Moving the pointer, keys, text, decks, and the other actions that keep the session alive start the wait again from the beginning. Changing the duration applies to a wait that is already running, so picking 15s is not stuck behind a 300s wait. Release, the phone locking, disconnect, and the idle release leave both the zoom and the wait in place. Off keeps the zoom until you press 1X. The server sends that return to 1X on its own, without taking the pointer. If a zoom-during-motion level is on screen when the wait ends, that extra zoom ends first and the screen then goes to 1X. A heartbeat ping does not restart the wait.
+**Zoom timeout** (Preferences, under Zoom during motion: **Off** / **300s** / **60s** / **15s**, 60s by default). Confirmed on this Mac: a 2X or 4X button level returns to 1X that long after the phone sits still. Moving the pointer, keys, text, decks, and the other actions that keep the session alive start the wait again from the beginning. Changing the duration applies to a wait that is already running, so picking 15s is not stuck behind a 300s wait. Leaving the Trackpad tab, the phone locking, and disconnect leave both the zoom and the wait in place. Off keeps the zoom until you press 1X. The server sends that return to 1X on its own, without taking the pointer. If a zoom-during-motion level is on screen when the wait ends, that extra zoom ends first and the screen then goes to 1X. A heartbeat ping does not restart the wait.
 
 **Stuck zoom?** The private zoom is not Accessibility Zoom, so ⌥⌘8 / Control-scroll will not undo it. Run `node scripts/zoom-probe.js private 1` on the Mac (sets it back to 1x right away), or restart `npm start` (the server resets a leftover private zoom when it starts the helper).
 
@@ -146,7 +146,7 @@ Tap **⋮** in the top bar: **Light mode / Dark mode**, **Preferences**, **Disco
 - **Open keyboard when Keys tab is selected** (off by default, stays on the phone): tapping the Keys tab, even when Keys is already showing, focuses the type field so the phone keyboard comes up ready to type. Automatic switches to Keys also try, which works on Android but not on iOS (Safari only raises the keyboard for a focus made inside a tap).
 - **Pointer and scroll speed** (0.25x to 3x on top of the built-in pointer speed; the same multiplier scales two-finger scrolling and its momentum, 1.00x scrolls exactly as before), **Acceleration** (pointer only), **Invert scroll direction**.
 - **Cursor size** while engaged: Off / Small / Medium / Large (default = `cursorScale` from config, normally Medium).
-- **Cursor timeout**: how long the enlarged cursor stays big after the last pointer activity, 0.5 s to 10 s, or *Until I stop driving* (big until Release, phone locked / backgrounded, or `idleMs`). The server shrinks it with `cursor.scale 1` and re-grows it on the next move or touch (helper 0.6.0+). Default = `cursorTimeoutMs` from config (0 = Until I stop driving).
+- **Cursor timeout**: how long the enlarged cursor stays big after the last pointer activity, 0.5 s to 10 s, or *Until I stop driving* (big until you leave the Trackpad tab, lock the phone, or disconnect). The server shrinks it with `cursor.scale 1` and re-grows it on the next move or touch (helper 0.6.0+). Default = `cursorTimeoutMs` from config (0 = Until I stop driving).
 
 ### Shortcut decks
 The **Deck** tab shows the deck for the app in front on a fixed 50×50 grid. **Edit** moves, adds, and removes buttons; drag one off the right edge to open the next page, and swipe between pages when there is more than one. Until that deck is edited on the phone, the built-in buttons are laid out two across. An app with no deck shows an empty state. **Ground Control** in the top-left of the status bar opens the system grid on every tab; tap the title again, or tap outside the grid, to close it. Built-in decks in [`decks/`](decks/):
@@ -169,7 +169,7 @@ The **System** popup's Mission Control / App Exposé / Show Desktop / Screenshot
 ### Menus tab
 The **Menus** tab shows the frontmost app's menu bar as a drill-down list: the **Apple menu () first**, then the app's menus. Tap a menu to open it, the **‹** button or a breadcrumb segment to go back, **↻** to re-read. Each item shows its checkmark, keyboard-shortcut hint (e.g. `⇧⌘N`) and is dimmed when disabled. Submenus are read lazily, one level per tap, so dynamic menus (Open Recent, Window…) are always current; the list resets to the top when another app comes to the front.
 
-Tapping a leaf item presses it through the helper's Accessibility **AXPress** on that exact `AXMenuItem` (addressed by path + id), never AppleScript / System Events and never clicks on menu-bar coordinates (SPEC §6.5). Anyone connected may browse; **pressing needs the pointer**, like deck buttons (implicit engage; if another phone has it you get *Take over*). *Quit …*, *Sleep*, *Restart*, *Shut Down* and *Log Out* items ask for confirmation on the phone first. Needs the same Accessibility grant as everything else.
+Tapping a leaf item presses it through the helper's Accessibility **AXPress** on that exact `AXMenuItem` (addressed by path + id), never AppleScript / System Events and never clicks on menu-bar coordinates (SPEC §6.5). Any connected phone may browse and press. The trackpad is the surface another phone can hold. Its tab icon has a green dot on the phone that has it and a red dot on the others. *Quit …*, *Sleep*, *Restart*, *Shut Down* and *Log Out* items ask for confirmation on the phone first. Needs the same Accessibility grant as everything else.
 
 ### Over Tailscale
 Use the Mac's `100.x` address or MagicDNS name with `:8788`. For HTTPS (`wss://`): `tailscale serve --bg 8788` and bookmark `https://<mac>.<tailnet>.ts.net/?k=<token>`.
@@ -181,7 +181,7 @@ Use the Mac's `100.x` address or MagicDNS name with `:8788`. For HTTPS (`wss://`
 | Server: static client, `/api/health`, `/api/status` (bearer), token file, LAN/Tailscale QR codes, MagicDNS URL | ✅ |
 | WebSocket `/ws`: `hello` auth within 2 s (or `Authorization: Bearer` on upgrade), close `4401` | ✅ |
 | Heartbeat (`ping`/`pong` 3 s, drop after 10 s), reconnect with backoff | ✅ |
-| One pointer owner, `session.engage` / `release` / `takeover` / `revoked`, idle release (20 s), release on disconnect / tab hidden / shutdown | ✅ |
+| One pointer owner, `session.engage` / `release` / `takeover` / `revoked`. The Trackpad tab keeps the pointer until that phone leaves it. Release on disconnect / tab hidden / shutdown. Idle is 0 s: a one-phone key or MIDI session releases as soon as the action is sent | ✅ |
 | Helper spawn + JSON-lines protocol, auto-restart with backoff, dry-run when missing, capability flags (`textFocus`, `zoom`) with one-time rebuild hints | ✅ |
 | Trackpad: move (2.5x base gain + host-side acceleration), tap / double-tap / two-finger tap, two-finger scroll + momentum, hold-to-drag, drag lock, L/R buttons | ✅ |
 | Trackpad zoom buttons 1X / 2X / 4X via the private WindowServer zoom (helper 0.8.2), Zoom during motion, and zoom timeout (Off / 300s / 60s / 15s, default 60s; a 2X / 4X level returns to 1X after the phone sits still) | ✅ private method and zoom timeout confirmed on this Mac. `keys` / `scroll` stay the fallbacks (`scroll` was ignored by Accessibility Zoom on 12.7.6) |
@@ -195,7 +195,7 @@ Use the Mac's `100.x` address or MagicDNS name with `:8788`. For HTTPS (`wss://`
 | App icons: 96 px PNG per versioned `iconId`, cached in IndexedDB on the phone (`icon.get`) | ✅ |
 | Shortcut decks: system popup (grouped, dimmed scrim), editable app deck (50×50 cells, pages, phone storage), window controls, built-ins for Safari, Chrome, Finder, Max, Spotify, VLC, TV, confirm for Sleep / Shut Down | ✅ (menu actions via AXPress). Extra button actions still open: DECK-PLAN.md (only available in the main repo) |
 | Helper `menu.get` / `menu.invoke` (AXPress only, no AppleScript): enabled / checked / shortcut with modifiers, Apple menu flagged first, disabled items refused | ✅ (helper sources; verify on Mac) |
-| Menus tab: drill-down tree + breadcrumb, refresh on focus change / drill-down / ↻, invoke by path + id (owner only, stale-app guard), confirm for Quit / Sleep / Restart / Shut Down / Log Out | ✅ |
+| Menus tab: drill-down tree + breadcrumb, refresh on focus change / drill-down / ↻, invoke by path + id (any phone, stale-app guard), confirm for Quit / Sleep / Restart / Shut Down / Log Out | ✅ |
 | Virtual MIDI: CoreMIDI source (`midiSourceName`, default “Ground Control”), `midi.note` / `midi.cc` / `midi.pitch` / `midi.transport`, all-notes-off on release | ✅ (helper sources; verify on Mac / in a DAW) |
 | MIDI tab: layouts (create, select, rename, delete). Each layout has a grid size, a background, and either one channel or a channel per control. The minimum cell size in Preferences sets how many columns and rows fit, and the grid fills the screen. Edit replaces the octave stepper with **+**. A one-second press opens a widget’s settings | ✅ |
 | Top bar ⋮ menu: light / dark mode, Preferences, Disconnect / Connect (no reload) | ✅ |
@@ -206,7 +206,7 @@ Use the Mac's `100.x` address or MagicDNS name with `:8788`. For HTTPS (`wss://`
 
 1. `npm run build:helper && npm run build && npm start`
 2. On the Mac open Logic / Ableton / MainStage / GarageBand / any CoreMIDI host and look for input **Ground Control** (rename via `midiSourceName` in `~/.config/ground-control/config.json`).
-3. Phone → bookmark → **MIDI** tab: choose a layout or make a new one, set the grid and the channel, then tap pads and drag faders. **Edit** changes the controls. Notes / CCs should appear in the DAW’s MIDI monitor. Ending the session (tap **live**, idle timeout, disconnect) sends all-notes-off.
+3. Phone → bookmark → **MIDI** tab: choose a layout or make a new one, set the grid and the channel, then tap pads and drag faders. **Edit** changes the controls. Notes / CCs should appear in the DAW’s MIDI monitor. Ending the session (leave the Trackpad tab, lock the phone, disconnect) sends all-notes-off when that phone is the last one.
 
 Extra messages beyond SPEC §7:
 - server → client: `helper.status {available, running, reason}`, `menu.invoked {ok, path}`, `textfocus.status {state, helperVersion}`.

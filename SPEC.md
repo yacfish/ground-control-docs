@@ -90,8 +90,9 @@ Store remote-desktop apps are viewers. The program that injects input on the con
 
 Mirrors ClipBridge:
 
-1. First run generates a random token (24 bytes, base64url) at `~/.config/ground-control/token` (mode `0600`). For every LAN / Tailscale address it prints a QR code of the bookmark URL, with the interface and address named on the line above the code. The MagicDNS form is printed as text:
+1. First run generates a random token (24 bytes, base64url) at `~/.config/ground-control/token` (mode `0600`). Above the codes it prints the bookmark URL for this Mac (`http://127.0.0.1:8788/?k=<token>` when listening on every interface) as a clickable terminal link. For every LAN / Tailscale address it prints a QR code of the bookmark URL, with the interface and address named on the line above the code. The MagicDNS form is printed as text:
    ```
+   http://127.0.0.1:8788/?k=<token>
    http://<mac-ip>:8788/?k=<token>
    http://<mac>.<tailnet>.ts.net:8788/?k=<token>
    ```
@@ -107,25 +108,28 @@ Each Mac runs its own server; the phone keeps one bookmark per Mac.
 
 ## 4. Sessions, pointer ownership and safety
 
-### One pointer owner
-Only **one client controls the Mac at a time**. A second client that connects (e.g. phone + iPad) sees "In use by <device name>" with a **Take over** button. Taking over sends the previous owner a `session.revoked` and releases its held state first. Read-only state (focused app, app list) may still be pushed to non-owners.
+### One trackpad
+Only **one phone holds the trackpad**. Move, scroll, buttons, drag lock, screen zoom and the enlarged cursor belong to that phone. Opening the Trackpad tab sends `session.engage` and claims it before a finger is down. That phone keeps it while the tab stays selected. Leaving the tab sends `session.release` for the pointer. A second phone can still open the tab: the pad says "In use by <device name>", and the buttons, drag lock, modifiers and zoom controls are grayed out. The Trackpad tab icon shows a green dot on the phone that holds it and a red dot on the others. No dot means it is free. There is no live / busy pill in the top bar. `session.takeover` still moves the pointer and sends the previous phone `session.revoked`. It does not release anyone's keys or MIDI notes.
+
+Keys, text, deck buttons, menu presses, app actions and MIDI are accepted from any connected phone. They do not take the trackpad. One phone alone still engages on the first of these and grows the cursor, then releases immediately (`idleMs` is 0). Sitting on the Trackpad tab does not time out.
+
+`window.press` and `window.set` stay with the trackpad phone. Their click fallback moves the pointer.
 
 ### Engage / release
-- `session.engage`: sent when the user starts interacting (first touch on the trackpad, or opening a control surface). Server:
-  - marks this client as owner,
-  - **grows the cursor** (§5),
-  - starts the idle timer.
-- `session.release`: explicit (user taps "live" / leaves the page / backgrounds the tab).
-- **Idle**: no input for `idleMs` (default 20 s) ⇒ automatic release.
-- **Socket drop**: heartbeat missing for 10 s, or socket closes ⇒ automatic release.
+- `session.engage`: claims the trackpad when it is free. Server marks this client as owner and **grows the cursor** (§5). If another phone holds it, the claim is refused and the phone is told who does. A claim from the Trackpad tab does not time out.
+- `session.takeover`: claims it anyway. The previous phone loses the pointer only.
+- `session.release`: this phone gives up what it holds. The trackpad phone also gives up the pointer. Leaving the Trackpad tab sends this.
+- **Idle**: `idleMs` is 0. It does not give the trackpad up. The phone that has the Trackpad tab open keeps it. A one-phone session started from a key, text, deck, or MIDI action releases as soon as that action is sent.
+- **Socket drop**: heartbeat missing for 10 s, or socket closes ⇒ that phone's release.
 
-### Release always means
-1. Release every **held mouse button** (send matching up events).
-2. Release every **held key and modifier** (sticky or physical). No stuck ⌘ after a Wi-Fi blip.
-3. **Restore the cursor** to its pre-session size.
-4. Send all-notes-off on any MIDI channel with active notes.
+### Release
+Each phone releases only what it holds:
 
-These run in the helper on a single code path so every exit route (explicit, idle, drop, revoke, server shutdown, helper crash recovery) is identical.
+1. The trackpad phone: every **held mouse button**, drag lock, and the **cursor** back to its pre-session size. A motion zoom returns to the button level.
+2. Whichever phone latched or locked a modifier, or is holding a key: **those keys**. A key another phone is also holding stays down.
+3. Whichever phone started a MIDI note: **those notes**. A note another phone is also holding stays on.
+
+The last phone to leave, and a phone that is alone, runs the full helper release (`session.release`): buttons, keys, modifiers, cursor and all-notes-off. While another phone is connected the helper gets `session.releasePointer` instead: mouse buttons, cursor and a motion zoom, and not that other phone's keys or notes. Server shutdown does the same. `session.state` carries `keysReleased: true` when this phone's keys were lifted, so its chips clear. Losing the trackpad does not.
 
 ### Heartbeat
 Client sends `ping` every 3 s; server replies `pong`. Server considers the client gone after 10 s of silence. The client reconnects with exponential backoff and re-sends `hello`; the session must be re-engaged (never auto-resumed with held keys).
@@ -135,7 +139,7 @@ Client sends `ping` every 3 s; server replies `pong`. Server considers the clien
 ## 5. Cursor visibility (couch mode)
 
 - On `session.engage` the helper **enlarges the system cursor** (configurable scale, default ~3×) and records the previous scale.
-- On release / idle / socket drop it **restores** the recorded scale.
+- On release (leaving the Trackpad tab, the phone locking, disconnect) or socket drop it **restores** the recorded scale. A cursor timeout can shrink it sooner. Idle does not restore it while the Trackpad tab is holding the pointer.
 - Persist the "original" scale to disk before changing it, so a crash or forced quit can restore it on next launch.
 - Current build: the helper uses the private `CGSSetCursorScale` (looked up with dlsym) and `cursor-restore.json`. Per phone, Preferences pick the engage size and a **cursor timeout** after which the server shrinks the cursor (`cursor.scale {scale:1}`) and re-grows it on the next pointer activity (§6.7). `cursorMode` is `system` or `off`.
 
@@ -281,7 +285,7 @@ Preferences (centered Cancel / OK dialog), saved in the phone's `localStorage` a
 - **Open keyboard when Keys tab is selected** (off by default, phone only, not sent to the server). Every tap on the Keys tab focuses the hidden Keys textarea synchronously in the tab's click handler, because iOS Safari only raises the keyboard for a `focus()` made inside the user gesture. Keys already showing: the field is focused directly (blurred first if it still counts as focused, so a dismissed keyboard comes back). Keys not mounted yet: an always-mounted, offscreen proxy textarea is focused in the tap, and Keys moves focus to its field right after it mounts (the keyboard stays up across that programmatic focus change); the proxy is blurred after 600 ms if Keys never mounts. An automatic switch to Keys requests the same focus without a gesture: Android / desktop focus the field, iOS will not show the keyboard. With the software keyboard down, Keys shows a round button at the bottom right of the panel (a keyboard with an upward chevron). That tap focuses the type field inside the gesture, blurred first if iOS still counts it as focused, and the button hides while `visualViewport` reports a keyboard inset.
 - **Mouse**: **Pointer and scroll speed** (`pointerSpeed`, 0.25 to 3, multiplies `POINTER_BASE_GAIN` (2.5) x `sensitivity`; the same multiplier, without the base gain or acceleration, scales `pointer.scroll` dx / dy server-side, so 1.0 leaves scroll unchanged), **Acceleration** (0 to 1.5, pointer only, replaces config `acceleration` for this phone), **Invert scroll direction** (flips both scroll axes server-side).
 - **Cursor size**: Off / Small / Medium / Large = engage scale 1 / 2 / 3 / 4, sent to the helper with `session.engage {cursorScale}` and live as `cursor.scale {scale}` while engaged.
-- **Cursor timeout**: `cursorTimeout` seconds (0.5 to 10, slider steps 0.5 / 1 / 2 / 3 / 5 / 10) or 0 = *Until I stop driving* (only release / idle shrink it). `null` = config `cursorTimeoutMs` (default 0). Timed on the server: after the owner's last pointer activity (`pointer.move` / `button` / `click` / `scroll`, or a fresh `session.engage` touch) it sends `cursor.scale {scale:1}`; the next pointer activity sends `cursor.scale {scale}` again. Does not end the session. Needs helper 0.6.0+ (`cursor.scale`); older helpers keep the cursor big until release.
+- **Cursor timeout**: `cursorTimeout` seconds (0.5 to 10, slider steps 0.5 / 1 / 2 / 3 / 5 / 10) or 0 = *Until I stop driving* (it stays big until the phone leaves the Trackpad tab, locks, or disconnects). `null` = config `cursorTimeoutMs` (default 0). Timed on the server: after the owner's last pointer activity (`pointer.move` / `button` / `click` / `scroll`, or a fresh `session.engage` touch) it sends `cursor.scale {scale:1}`; the next pointer activity sends `cursor.scale {scale}` again. Does not end the session. Needs helper 0.6.0+ (`cursor.scale`); older helpers keep the cursor big until release.
 - **Zoom entry method** (phone only, not sent in `prefs.set`): **Pinch** (default), **Slider**, or **Buttons**. Pinch and the slider set a factor from 1.00 to 6.00 (`zoom.set {factor}`). Buttons stay the discrete 1X / 2X / 4X levels (`zoom.set {level}`). Choosing another method on Preferences OK returns the zoom to 1X. Two-finger drag still scrolls while pinch is the entry method.
 - **Zoom during motion**: 1X / 1.25X / 1.5X (`zoomMotion` 1 / 1.25 / 1.5, default 1X). While this phone moves the pointer, the Mac screen zooms to that level (private zoom), then returns to the button level `zoom.motionIdleMs` (500 ms) after the last movement; 1X never zooms in further on movement (§6.8).
 - **Zoom timeout**: Off / 300s / 60s / 15s (`zoomTimeout` 0 / 300 / 60 / 15, default 60). A 2X or 4X button level returns to 1X after the phone sits still for that long (§6.8). Confirmed on this Mac.
@@ -295,7 +299,7 @@ Preferences (centered Cancel / OK dialog), saved in the phone's `localStorage` a
 - Relative methods use the last level set: the server tracks it (`from`, assumed 1X at server start) and presses are never dropped helper-side; **1X is a reset** for them (it overshoots toward zoom-out). Pressing the current 2X / 4X again does nothing for `keys` / `scroll`.
 - Runs on a helper serial queue, never the main thread. Stuck-modifier safety: the zoom tracks the modifier keys it holds; if it has not finished within the exit timeout (0.5 s) the exit path posts their key-ups with nil-source events before `exit(0)`. A `zoom.set` counts as keyboard use, so the next release runs the modifier key-up sweep. No AppleScript.
 - Owner only with implicit engage (it changes the Mac screen); the server forwards only `zoom.set`, never a pointer scroll. Release does not send `zoom.set`. The helper's release leaves a private 1X / 2X / 4X button level in place (Accessibility Zoom set through `keys` / `scroll` is not touched either). The server keeps the zoom state (`level` = last level set) and pushes it to every phone; the phone highlights the level (pending while a press is in flight). Capability: helper `ready {zoom:true}` (0.7.0+); with an older helper the buttons are disabled, `zoom.set` gets `error unsupported`, and the server logs a rebuild hint once. The server logs the methods the helper sees (once per helper version), every press (from → to, method, what was posted, factor), once when the keyboard shortcuts are off while `keys` is used, and once when the scroll gesture is off while `scroll` is used.
-- **Zoom during motion** (phone Preferences `zoomMotion`: 1, 1.25 or 1.5, default 1; sent in `prefs.set`, applied live; helper 0.8.2+, `ready {zoomMotion:true}`). Timed on the server, per owner: an owner `pointer.move` that actually moves, with `zoomMotion` above the button level (`zoomAssumed`), sends `zoom.motion {on: true, level, smooth}` once per burst and arms one idle timer (re-armed for whatever is left, like the cursor timeout); `zoom.motionIdleMs` (config, default 500, 100 to 10000; also in `welcome.settings.zoomMotionIdleMs`) after the last move it sends `zoom.motion {on: false}`. Helper (private API only): on = Set(max(level, button level)) around the pointer, verified with Get, silent if already there; off = Set(button level, 1.0 if none) and verify with Get. It replies `zoom.state {mode: motion, active, level, base?, factor, ok, error?}`; the server keeps the buttons on the button level and pushes `zoom.motion` (level or null) in its zoom state. Interplay with the buttons: motion only zooms in beyond the button level and returns to it (1.25X / 1.5X do nothing while a 2X / 4X button is set); a button at or above the motion level replaces the motion zoom; a lower one is recorded and applied when motion ends. 1X (or a level not above the button) while motion-zoomed sends `{on: false}` right away. `session.release` drops only a motion zoom, back to the button level (`zoom.state` mode `motion`, `reason: release`, `level` = that button level). A private button level stays, and the server keeps tracking it. Helper exit still resets the private zoom to 1x, and a killed helper's zoom is reset on the next start (`zoom.resetPrivate`).
+- **Zoom during motion** (phone Preferences `zoomMotion`: 1, 1.25 or 1.5, default 1; sent in `prefs.set`, applied live; helper 0.8.2+, `ready {zoomMotion:true}`). Timed on the server, per owner: an owner `pointer.move` that actually moves, with `zoomMotion` above the button level (`zoomAssumed`), sends `zoom.motion {on: true, level, smooth}` once per burst and arms one idle timer (re-armed for whatever is left, like the cursor timeout); `zoom.motionIdleMs` (config, default 500, 100 to 10000; also in `welcome.settings.zoomMotionIdleMs`) after the last move it sends `zoom.motion {on: false}`. Helper (private API only): on = Set(max(level, button level)) around the pointer, verified with Get, silent if already there; off = Set(button level, 1.0 if none) and verify with Get. It replies `zoom.state {mode: motion, active, level, base?, factor, ok, error?}`; the server keeps the buttons on the button level and pushes `zoom.motion` (level or null) in its zoom state. Interplay with the buttons: motion only zooms in beyond the button level and returns to it (1.25X / 1.5X do nothing while a 2X / 4X button is set); a button at or above the motion level replaces the motion zoom; a lower one is recorded and applied when motion ends. 1X (or a level not above the button) while motion-zoomed sends `{on: false}` right away. Giving up the trackpad drops only a motion zoom, back to the button level (`zoom.state` mode `motion`, `reason: release`, `level` = that button level). The helper does that on `session.release` (this phone is alone, or it is the last one) and on `session.releasePointer` (another phone is still connected). A private button level stays, and the server keeps tracking it. Helper exit still resets the private zoom to 1x, and a killed helper's zoom is reset on the next start (`zoom.resetPrivate`).
 - **Zoom timeout** (phone Preferences, under Zoom during motion: **Off** / **300s** / **60s** / **15s**, default 60). Confirmed on this Mac. A 2X or 4X button level returns to 1X this long after the phone stops being used. Pointer moves, keys, text, decks, and the other actions that restart the session idle timer (`_touchIdle`) start this wait again from the beginning. A heartbeat `ping` does not. `session.release` (Release, disconnect, idle, the phone locking) leaves the button level and the wait in place. Off (`0`) leaves the level until 1X is pressed. Changing `zoomTimeout` while a 2X or 4X level is up re-arms immediately, so 15 s is not stuck behind a 300 s wait. The server times it and, when it elapses, sends `zoom.set {level: 1, from}` without engaging a session. If a motion zoom is on screen, that ends first, then the button level goes to 1X. `zoomTimeout` is in `prefs.set` (0, 15, 60, or 300; `null` resets to 60).
 - Try each method with `node scripts/zoom-probe.js method <auto|private|keys|scroll> <1|2|4> [--from N]` (§12).
 
@@ -310,9 +314,9 @@ JSON text frames, one message per frame. Every message has `t` (type). Client→
 |---|---|---|
 | `hello` | `{token, device, clientVersion}` | must be first; ≤2 s |
 | `ping` | `{}` | every 3 s |
-| `session.engage` | `{}` | grows cursor, claims ownership |
-| `session.release` | `{}` | releases everything (§4) |
-| `session.takeover` | `{}` | when another client owns the pointer |
+| `session.engage` | `{}` | claims the trackpad when it is free; grows the cursor |
+| `session.release` | `{}` | releases what this phone holds (§4) |
+| `session.takeover` | `{}` | takes the trackpad from another phone; their keys and notes stay |
 | `pointer.move` | `{dx, dy}` | relative, device px |
 | `pointer.button` | `{button: "left"\|"right"\|"middle", down: bool}` | |
 | `pointer.click` | `{button, count}` | convenience for tap / double-tap |
@@ -324,23 +328,23 @@ JSON text frames, one message per frame. Every message has `t` (type). Client→
 | `deck.run` | `{deckId, buttonId, confirmed?}` | server resolves to action; `confirmed: true` required for sleep / shutdown / `confirm:true` buttons |
 | `midi.note` / `midi.cc` / `midi.pitch` / `midi.transport` | see §6.3 | |
 | `apps.list` | `{}` | running apps (§6.4.1) |
-| `apps.activate` / `apps.hide` / `apps.quit` | `{bundleId}` | owner only |
+| `apps.activate` / `apps.hide` / `apps.quit` | `{bundleId}` | any phone; one phone alone still engages |
 | `apps.catalog` | `{}` | Applications folder listing (§6.4.3) |
-| `apps.open` | `{path?, bundleId?}` | launch or activate; `path` must end in `.app`; owner only |
+| `apps.open` | `{path?, bundleId?}` | launch or activate; `path` must end in `.app`; any phone |
 | `dock.list` | `{}` | Dock items (§6.4.2) |
-| `dock.open` | `{id, path?, url?}` | open a Dock item by id (re-resolved helper-side); owner only |
+| `dock.open` | `{id, path?, url?}` | open a Dock item by id (re-resolved helper-side); any phone |
 | `icon.get` | `{iconIds: [...]}` | ≤ 64 ids per message (client sends ≤ 24) |
 | `menu.get` | `{path?: [...]}` | top level when omitted; any client |
 | `zoom.set` | `{level: 1\|2\|4}` | zoom preset (§6.8); owner only (implicit engage); `bad_request` for other levels, `unsupported` with a pre-0.7.0 helper |
 | `prefs.set` | `{pointerSpeed?, acceleration?, cursorScale?, cursorTimeout?, autoKeys?, invertScroll?}` | per-phone Preferences (§6.7), any client; sent after every `welcome`; `null` resets a field to the server default |
-| `menu.invoke` | `{path: [...], id?, pid?}` | AXPress only; never AppleScript or coordinates; owner only (implicit engage); `pid` from the `menu` reply; refused with `stale_menu` if another app is now in front |
+| `menu.invoke` | `{path: [...], id?, pid?}` | AXPress only; never AppleScript or coordinates; any phone; `pid` from the `menu` reply; refused with `stale_menu` if another app is now in front |
 
 ### Server → client
 | `t` | Payload |
 |---|---|
 | `welcome` | `{serverVersion, owner: bool, settings}` |
 | `pong` | `{}` |
-| `session.state` | `{engaged, owner, ownerDevice}` |
+| `session.state` | `{engaged, owner, ownerDevice, reason?, keysReleased?}` | `keysReleased` means this phone's keys were lifted |
 | `session.revoked` | `{byDevice}` |
 | `focus.changed` | `{bundleId, name, pid}` |
 | `apps` | `{apps: [{bundleId, name, pid, active, hidden, path, iconId}]}`: reply to `apps.list`, and broadcast on launch/quit/hide/activate |
@@ -368,6 +372,7 @@ Server ↔ helper uses the same message shapes over stdin/stdout (newline-delimi
 |---|---|---|
 | helper → server | `ready` | `{version, accessibility, cursorScale, midi, midiSourceName, textFocus, zoom, zoomMotion}`: capability flags drive one-time "rebuild the helper" logs |
 | server → helper | `session.engage` / `cursor.scale` | `{cursorScale}` / `{scale}` (§5, §6.7) |
+| server → helper | `session.release` / `session.releasePointer` | full release when this phone is alone or last (§4) / pointer only while another phone is connected (mouse buttons, cursor, motion zoom). Both drop a motion zoom back to the button level. Only `session.release` sends all-notes-off |
 | server → helper | `textfocus.watch` | `{on}`; helper replies `textfocus.status {ok, watching, reason?}` and emits `textfocus` (§6.7) |
 | server → helper | `zoom.set` / `zoom.get` | `{level, from, method, keySteps2x, keySteps4x, keyOut, keyGapMs, units2x, units4x, out, scrollUnits, scrollTap, continuous, suppress, smooth, settleMs, invert, holdModifier}` / `{}` (§6.8) |
 | server → helper | `zoom.motion` | `{on: true, level: 1\|1.25\|1.5, smooth}` / `{on: false, smooth}`: Zoom during motion (§6.8); helper replies `zoom.state {mode: motion, active, level, base?, factor, ok, error?}` when it changed the zoom |
@@ -442,7 +447,7 @@ Errors from the helper carry `ref: <request type>`.
 | WebSocket stream for input, not HTTP | Locked |
 | Phone is a controller only: **no screen stream** | Locked |
 | Swift helper posts CGEvent; Accessibility permission | Locked |
-| Cursor grows on engage, restores on release / idle / socket drop | Locked |
+| Cursor grows on engage, restores on release / socket drop. Idle restores it only when the Trackpad tab is not holding the pointer | Locked |
 | Menus invoked via **Accessibility (AXPress) only**, never AppleScript and never by clicking menu-bar coordinates | **Locked** |
 | Apple menu always present in the menu tree | Locked |
 | Apps tab = **Dock · Running · Apps** sections (no new bottom tab); running-apps switcher kept | Locked |

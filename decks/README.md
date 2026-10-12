@@ -47,7 +47,7 @@ Saved phone decks and MIDI layouts are a different folder, `library/` under the 
 
 ### Confirmation (dangerous buttons)
 
-Buttons whose action is `sleep` / `shutdown`, or any action with `"confirm": true` (including a `sequence` containing one), are sent to the phone with `confirm: true`. The Deck tab shows a confirm sheet (optional per-button `"confirmText"`); only **OK** sends `{ "t": "deck.run", deckId, buttonId, "confirmed": true }`, which then executes immediately. The server answers an unconfirmed run with `error confirm_required` and sends nothing to the helper; the helper itself also refuses `system.sleep` / `system.shutdown` without `confirmed: true`. Clients cannot send `system.*` directly (only via a deck button). Owner rules are the same as any `deck.run` (implicit engage; non-owners get `not_owner`).
+Buttons whose action is `sleep` / `shutdown`, or any action with `"confirm": true` (including a `sequence` containing one), are sent to the phone with `confirm: true`. The Deck tab shows a confirm sheet (optional per-button `"confirmText"`); only **OK** sends `{ "t": "deck.run", deckId, buttonId, "confirmed": true }`, which then executes immediately. The server answers an unconfirmed run with `error confirm_required` and sends nothing to the helper; the helper itself also refuses `system.sleep` / `system.shutdown` without `confirmed: true`. Clients cannot send `system.*` directly (only via a deck button). A deck button does not need the trackpad: another phone can run it while someone else holds the pointer. One phone alone still engages on `deck.run`, as it does for any other action.
 
 Shutdown asks apps to quit normally, so an app with unsaved changes can still interrupt it — same as the Apple menu.
 
