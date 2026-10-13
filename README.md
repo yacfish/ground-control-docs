@@ -214,6 +214,13 @@ Extra messages beyond SPEC §7:
 - helper → server: `ready {version, accessibility, cursorScale, midi, midiSourceName, textFocus, zoom, zoomMotion}`, `textfocus {editable, role?, subrole?, pid?}`, `textfocus.status {ok, watching, reason?}`, `zoom.state {level, from?, method, requested?, fallback?, presses?, delta?, privateFactor?, before?, factor?, ok, error?, hotkeys?, privateAPI?, scrollZoom?, motion?, active?, reason?, ms?}` (`mode: motion` for Zoom during motion, `mode: reset` when a private zoom was reset).
 - client → helper: `midi.transport {cmd: start|stop|continue}` (system realtime).
 
+Specified for the Chrome extension, and not in this build. The note is `chrome/HELPER.md` in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks), protocol `ext/1`. The extension talks to the Node server. The helper only posts macOS notifications:
+
+- A pairing code (6 digits, 2 minutes, single use). A helper menu item or `npm run ext:pair` asks for it. The helper shows the code, and the server prints it.
+- `confirm.show {id, title, body, timeoutMs}` posts one notification with Accept and Reject (`UNUserNotificationCenter`). The title is the control name. The body is the type and the site, for example `button on youtube.com`. A new or edited mapping waits 30 s. A sensitive action waits 15 s.
+- `confirm.result {id, accepted}` is the answer. Closing the notification is Reject. On timeout the helper removes it. When notifications are off, the server reports `confirm_unavailable` and the action does not run.
+- The helper does not fetch presets, and it needs no new message for which app is in front.
+
 Errors that come back from the helper carry `ref: <request type>` (e.g. `menu.get`, `menu.invoke`, `deck.run`).
 
 App icons fall back to a letter tile when the helper returns no PNG; an `.icns`-file fallback is deferred.
@@ -225,6 +232,7 @@ src/         React client: App.jsx (tabs, top menu, auto Keys), connection.js, T
              Apps.jsx (+ icons.js cache), Menus.jsx + menuModel.js, Preferences.jsx + prefs.js, styles.css
 decks/       Built-in shortcut deck JSON (system + per-app)
 helper/      Swift package gc-helper: Input, Keys, Cursor, Menu (AXPress), Apps, MIDI (CoreMIDI virtual source), System (sleep / shut down),
-             TextFocus (auto Keys), Zoom (zoom presets: private API, keys, scroll), IO, main
+             TextFocus (auto Keys), Zoom (zoom presets: private API, keys, scroll), IO, main.
+             Pairing-code and Accept / Reject notifications for the Chrome extension are specified (SPEC §7) and not in this tree.
 scripts/     build-helper.sh, check-helper.sh, mock-helper.js, smoke-test.js, helper-probe.js, zoom-probe.js
 ```

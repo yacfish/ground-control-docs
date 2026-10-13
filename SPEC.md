@@ -389,8 +389,20 @@ Server ↔ helper uses the same message shapes over stdin/stdout (newline-delimi
 | probe → helper | `zoom.once` | `{method: scroll\|keys\|private, delta \| factor, ...tuning}`: one scroll gesture of `delta`, `delta` shortcut presses, or private zoom `factor` (never sent by the server) |
 | helper → server | `zoom.state` | `{level, from?, method, requested?, fallback?, presses?, delta?, privateFactor?, before?, factor?, ok, error?, scrollZoom?, ms?}`; `zoom.get` reply: `mode: read` + `privateAPI, privateSymbols?, privateWorks?, privateFactor?, hotkeys (pref, else the shortcut's enabled flag, else null), hotkeyIn, scrollZoom?` |
 | server → helper | `system.sleep` / `system.shutdown` | `{confirmed: true}` required (§6.2) |
+| server → helper | `confirm.show` | `{id, title, body, timeoutMs}`: Chrome extension notification, specified and not built (below) |
+| helper → server | `confirm.result` | `{id, accepted}`: Accept or Reject for that notification |
 
 Errors from the helper carry `ref: <request type>`.
+
+### Chrome extension notifications (specified, not built)
+
+The Chrome extension is a separate client in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks) (`chrome/HELPER.md`, protocol `ext/1`, final for v1 on 2026-10-13). It talks to the Node server. The Swift helper does not speak to the extension. Its work is the two macOS notifications below. It does not fetch or check presets. It already reports the frontmost app, and the server combines that with the extension's own focus message, so this needs no new helper message.
+
+**Pairing code.** The user asks on the Mac, from a helper menu item or with `npm run ext:pair`. The server makes a 6-digit code, valid for 2 minutes, single use, and five wrong tries require a new code. The helper shows that code in a macOS notification, and the server prints it. `HELPER.md` describes this notification and does not give it a message type of its own.
+
+**Confirm.** Adding or editing a mapping, and running an action the extension has marked sensitive, asks on the Mac. The helper posts one notification through `UNUserNotificationCenter`, in a category with Accept and Reject. The title is the control name. The body is the control type and the site, for example `button on youtube.com`. The phone shows a status line. It does not show a confirm sheet.
+
+The server sends `confirm.show`. A mapping confirm waits 30 s (`timeoutMs` 30000). A sensitive action waits 15 s (`timeoutMs` 15000). The helper answers `confirm.result` with `accepted: true` for Accept and `accepted: false` for Reject. Closing the notification is Reject. When the wait elapses, the helper removes the notification and the server reports `timeout`. When notifications are disabled for the helper, the server reports `confirm_unavailable` and the action does not run. A sensitive action is sent to the extension only after Accept, with `confirmed: true`.
 
 ---
 
@@ -400,6 +412,7 @@ Errors from the helper carry `ref: <request type>`.
 - **Automation** (Apple Events → System Events) is **not required** for v1 menus; invocation is Accessibility-only.
 - **Apps surface needs no extra permission**: listing running apps, reading the Dock's preferences (`com.apple.dock`, readable by the logged-in user's non-sandboxed processes), scanning the Applications folders and launching apps are all unprivileged. No Full Disk Access, no Automation.
 - No Screen Recording permission: there is no screen capture. Zoom presets need no extra permission either (they read `com.apple.universalaccess` / `com.apple.symbolichotkeys`, post events under the Accessibility grant, or call the private WindowServer zoom).
+- **Notifications** are for the Chrome extension pairing code and for its Accept / Reject confirms (§7). Not built. When they are turned off for the helper, a confirm does not run and the server reports `confirm_unavailable`.
 - Must run inside the logged-in graphical session (not over SSH), like ClipBridge.
 - Known SSH-only limitation: outside a GUI login, creating events from a `CGEventSource(stateID: .hidSystemState)` can block for more than 3 s, while nil-source events are created in ~12 ms. The zoom exit fallback and the release modifier sweep use nil-source events; the zoom key / scroll events and the rest of `InputController` (pointer, keys, text) use the HID-state source, which works in the GUI session (the zoom creates it lazily on its own queue, never on the main thread). CoreMIDI client creation also fails without a GUI session (e.g. `268435459`).
 
@@ -443,6 +456,7 @@ Errors from the helper carry `ref: <request type>`.
 - MIDI feedback (virtual destination → phone LEDs).
 - Gesture shortcuts (three-finger swipe ⇒ Mission Control / switch Spaces).
 - Bonjour discovery for the QR/bookmark flow.
+- Chrome extension (`ext/1`, specified in ground-control-app-hooks `chrome/HELPER.md`, not built). The extension talks to the Node server. The helper shows a pairing-code notification and an Accept / Reject notification (`confirm.show` / `confirm.result`). It does not fetch presets.
 
 ---
 
@@ -467,6 +481,7 @@ Errors from the helper carry `ref: <request type>`.
 | No hosted CI (GitHub Actions removed): `npm run check` and, on a Mac, `npm run check:helper` before pushing | Locked |
 | Final product (§2.1): free notarized Mac menu-bar app off the store + App Store iPhone app (free trackpad and keys, Pro in-app purchase). The Mac gates Pro commands after a signed StoreKit transaction. The browser page stays the free remote | Locked |
 | Editable grids: MIDI chooses its column and row counts. The Deck uses fixed 50×50 cells, separate width and height, and pages. Both are in this build (§6.2, §6.3). Deck buttons still cannot send every helper command the plan lists | Locked |
+| Chrome extension confirms and the pairing code are macOS notifications from the helper (`confirm.show` / `confirm.result`, Accept and Reject). Protocol `ext/1` in ground-control-app-hooks. The helper does not talk to the extension and does not fetch presets | Specified, not built |
 
 ---
 
