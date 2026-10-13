@@ -18,7 +18,7 @@ The current build is a phone browser and a Node server. The plan for what ships 
 
 **[SPEC.md](SPEC.md)** §2.1 is the earlier shape: an iPhone app only, and one Pro unlock for Text, Deck, MIDI, Apps, Menus, and zoom. The research notes replace that.
 
-> Status: **v1 prototype.** Trackpad (pinch, slider, or 1X / 2X / 4X, plus a zoom timeout), keyboard (live echo, auto-repeat), a Text composer, an editable Deck for the focused app, a system popup, **Virtual MIDI** (CoreMIDI source “Ground Control”: pads / CC / pitch / transport), the **Apps** tab (**Dock · Running · Apps**), the **Menus** tab and per-phone **Preferences** work on a Mac. Helper **0.8.2**. What is still open is in **DECK-PLAN.md (only available in the main repo)** and **[SPEC.md](SPEC.md)** §10.
+> Status: **v1 prototype.** Trackpad (pinch, slider, or 1X / 2X / 4X, plus a zoom timeout), keyboard (live echo, auto-repeat), a Text composer, an editable Deck for the focused app, a system popup, **Virtual MIDI** (CoreMIDI source “Ground Control”: pads / CC / pitch / transport), the **Apps** tab (**Dock · Running · Apps**), the **Menus** tab and per-phone **Preferences** work on a Mac. Helper **0.9.0**. What is still open is in **DECK-PLAN.md (only available in the main repo)** and **[SPEC.md](SPEC.md)** §10.
 
 Ground Control is a sibling of [ClipBridge](https://github.com/yacfish/clipbridge) and shares its shape:
 
@@ -214,12 +214,12 @@ Extra messages beyond SPEC §7:
 - helper → server: `ready {version, accessibility, cursorScale, midi, midiSourceName, textFocus, zoom, zoomMotion}`, `textfocus {editable, role?, subrole?, pid?}`, `textfocus.status {ok, watching, reason?}`, `zoom.state {level, from?, method, requested?, fallback?, presses?, delta?, privateFactor?, before?, factor?, ok, error?, hotkeys?, privateAPI?, scrollZoom?, motion?, active?, reason?, ms?}` (`mode: motion` for Zoom during motion, `mode: reset` when a private zoom was reset).
 - client → helper: `midi.transport {cmd: start|stop|continue}` (system realtime).
 
-Specified for the Chrome extension, and not in this build. The note is `chrome/HELPER.md` in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks), protocol `ext/1`. The extension talks to the Node server. The helper only posts macOS notifications:
+Helper 0.9.0 posts the Chrome extension banners. The note is `chrome/HELPER.md` in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks), protocol `ext/1`. The extension talks to the Node server. The server does not send these yet. The helper only posts macOS notifications (`ready.notify`):
 
-- A pairing code (6 digits, 2 minutes, single use). A helper menu item or `npm run ext:pair` asks for it. The helper shows the code, and the server prints it.
-- `confirm.show {id, title, body, timeoutMs}` posts one notification with Accept and Reject (`UNUserNotificationCenter`). The title is the control name. The body is the type and the site, for example `button on youtube.com`. A new or edited mapping waits 30 s. A sensitive action waits 15 s.
-- `confirm.result {id, accepted}` is the answer. Closing the notification is Reject. On timeout the helper removes it. When notifications are off, the server reports `confirm_unavailable` and the action does not run.
-- The helper does not fetch presets, and it needs no new message for which app is in front.
+- `pair.show {code, timeoutMs?}` shows a 6-digit pairing code. A helper menu item or `npm run ext:pair` asks for it. The server prints the same code. The helper answers `pair.shown` and removes the banner when the wait elapses (2 minutes unless `timeoutMs` says otherwise).
+- `confirm.show {id, title, body, timeoutMs?}` posts one notification with Accept and Reject. The title is the control name. The body is the type and the site, for example `button on youtube.com`. A new or edited mapping waits 30 s. A sensitive action waits 15 s. The helper answers `confirm.shown` when the banner is up. macOS 12 will not let this ad-hoc helper use UserNotifications, so the banner is posted with the older notification center, from `helper/bin/gc-helper.app`.
+- `confirm.result {id, accepted}` is the answer. Closing the notification is Reject. On timeout the helper removes the banner and sends nothing. When notifications are off, the helper answers `error` `confirm_unavailable` and the action does not run.
+- The helper does not fetch presets, and it needs no new message for which app is in front. The first banner asks for notification permission.
 
 Errors that come back from the helper carry `ref: <request type>` (e.g. `menu.get`, `menu.invoke`, `deck.run`).
 
@@ -232,7 +232,6 @@ src/         React client: App.jsx (tabs, top menu, auto Keys), connection.js, T
              Apps.jsx (+ icons.js cache), Menus.jsx + menuModel.js, Preferences.jsx + prefs.js, styles.css
 decks/       Built-in shortcut deck JSON (system + per-app)
 helper/      Swift package gc-helper: Input, Keys, Cursor, Menu (AXPress), Apps, MIDI (CoreMIDI virtual source), System (sleep / shut down),
-             TextFocus (auto Keys), Zoom (zoom presets: private API, keys, scroll), IO, main.
-             Pairing-code and Accept / Reject notifications for the Chrome extension are specified (SPEC §7) and not in this tree.
+             TextFocus (auto Keys), Zoom (zoom presets: private API, keys, scroll), Confirm (pairing code and Accept / Reject, SPEC §7), IO, main.
 scripts/     build-helper.sh, check-helper.sh, mock-helper.js, smoke-test.js, helper-probe.js, zoom-probe.js
 ```

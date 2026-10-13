@@ -1,6 +1,6 @@
 # Ground Control: Specification
 
-Version 0.3 (October 2026: matches main with helper 0.8.2. The Deck tab is the focused app’s editable grid, and the system grid is the title popup. Preferences, auto Keys, Keys echo and auto-repeat, Text composer, Trackpad zoom, and the zoom timeout are in this build. Zoom timeout confirmed on this Mac. Local checks). Author: Yacine Sebti.
+Version 0.3 (October 2026: matches main with helper 0.9.0. The Deck tab is the focused app’s editable grid, and the system grid is the title popup. Preferences, auto Keys, Keys echo and auto-repeat, Text composer, Trackpad zoom, and the zoom timeout are in this build. Zoom timeout confirmed on this Mac. Local checks). Author: Yacine Sebti.
 
 Ground Control turns a phone into a remote **controller** for a Mac: trackpad, keyboard, shortcut decks, MIDI, an Apps surface (Dock, running apps, Applications folder) and the frontmost app's menu bar. It is built for the couch/TV case (Mac on a big screen, you across the room) and works equally over Tailscale. The current build is a phone browser talking to a Node server. The final product is the menu-bar Mac app and the iPhone app in §2.1.
 
@@ -379,7 +379,7 @@ Server ↔ helper uses the same message shapes over stdin/stdout (newline-delimi
 
 | Direction | `t` | Payload |
 |---|---|---|
-| helper → server | `ready` | `{version, accessibility, cursorScale, midi, midiSourceName, textFocus, zoom, zoomMotion}`: capability flags drive one-time "rebuild the helper" logs |
+| helper → server | `ready` | `{version, accessibility, cursorScale, midi, midiSourceName, textFocus, zoom, zoomMotion, notify}`: capability flags drive one-time "rebuild the helper" logs. `notify` is helper 0.9.0+ |
 | server → helper | `session.engage` / `cursor.scale` | `{cursorScale}` / `{scale}` (§5, §6.7) |
 | server → helper | `session.release` / `session.releasePointer` | full release when this phone is alone or last (§4) / pointer only while another phone is connected (mouse buttons, cursor, motion zoom). Both drop a motion zoom back to the button level. Only `session.release` sends all-notes-off |
 | server → helper | `textfocus.watch` | `{on}`; helper replies `textfocus.status {ok, watching, reason?}` and emits `textfocus` (§6.7) |
@@ -389,20 +389,25 @@ Server ↔ helper uses the same message shapes over stdin/stdout (newline-delimi
 | probe → helper | `zoom.once` | `{method: scroll\|keys\|private, delta \| factor, ...tuning}`: one scroll gesture of `delta`, `delta` shortcut presses, or private zoom `factor` (never sent by the server) |
 | helper → server | `zoom.state` | `{level, from?, method, requested?, fallback?, presses?, delta?, privateFactor?, before?, factor?, ok, error?, scrollZoom?, ms?}`; `zoom.get` reply: `mode: read` + `privateAPI, privateSymbols?, privateWorks?, privateFactor?, hotkeys (pref, else the shortcut's enabled flag, else null), hotkeyIn, scrollZoom?` |
 | server → helper | `system.sleep` / `system.shutdown` | `{confirmed: true}` required (§6.2) |
-| server → helper | `confirm.show` | `{id, title, body, timeoutMs}`: Chrome extension notification, specified and not built (below) |
-| helper → server | `confirm.result` | `{id, accepted}`: Accept or Reject for that notification |
+| server → helper | `pair.show` | `{code, timeoutMs?}`: 6-digit pairing code (helper 0.9.0). Default wait 120 s, clamped to 1–120 s |
+| helper → server | `pair.shown` | `{id: "pair", code}`: the pairing banner is up |
+| server → helper | `confirm.show` | `{id, title, body, timeoutMs?}`: Accept / Reject banner (helper 0.9.0). Default wait 30 s, clamped to 1–120 s |
+| helper → server | `confirm.shown` | `{id}`: the confirm banner is up |
+| helper → server | `confirm.result` | `{id, accepted}`: Accept (`true`) or Reject (`false`). Closing the banner is Reject |
 
 Errors from the helper carry `ref: <request type>`.
 
-### Chrome extension notifications (specified, not built)
+### Chrome extension notifications (helper 0.9.0)
 
-The Chrome extension is a separate client in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks) (`chrome/HELPER.md`, protocol `ext/1`, final for v1 on 2026-10-13). It talks to the Node server. The Swift helper does not speak to the extension. Its work is the two macOS notifications below. It does not fetch or check presets. It already reports the frontmost app, and the server combines that with the extension's own focus message, so this needs no new helper message.
+The Chrome extension is a separate client in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks) (`chrome/HELPER.md`, protocol `ext/1`, final for v1 on 2026-10-13). It talks to the Node server. The Swift helper does not speak to the extension. Its work is the two macOS notifications below. It does not fetch or check presets. It already reports the frontmost app, and the server combines that with the extension's own focus message. The server does not send these messages yet. `ready.notify` is true from helper 0.9.0.
 
-**Pairing code.** The user asks on the Mac, from a helper menu item or with `npm run ext:pair`. The server makes a 6-digit code, valid for 2 minutes, single use, and five wrong tries require a new code. The helper shows that code in a macOS notification, and the server prints it. `HELPER.md` describes this notification and does not give it a message type of its own.
+**Pairing code.** The user asks on the Mac, from a helper menu item or with `npm run ext:pair`. The server makes a 6-digit code, valid for 2 minutes, single use, and five wrong tries require a new code. `HELPER.md` describes the banner and does not name a message. This helper shows it for `pair.show`. The server prints the same code. One pairing banner is up at a time. A new code replaces it. The helper removes it when the wait elapses and sends no further message.
 
 **Confirm.** Adding or editing a mapping, and running an action the extension has marked sensitive, asks on the Mac. The helper posts one notification through `UNUserNotificationCenter`, in a category with Accept and Reject. The title is the control name. The body is the control type and the site, for example `button on youtube.com`. The phone shows a status line. It does not show a confirm sheet.
 
-The server sends `confirm.show`. A mapping confirm waits 30 s (`timeoutMs` 30000). A sensitive action waits 15 s (`timeoutMs` 15000). The helper answers `confirm.result` with `accepted: true` for Accept and `accepted: false` for Reject. Closing the notification is Reject. When the wait elapses, the helper removes the notification and the server reports `timeout`. When notifications are disabled for the helper, the server reports `confirm_unavailable` and the action does not run. A sensitive action is sent to the extension only after Accept, with `confirmed: true`.
+The server sends `confirm.show`. A mapping confirm waits 30 s. A sensitive action waits 15 s. The helper answers `confirm.shown` once the banner is up, then `confirm.result` with `accepted: true` for Accept and `accepted: false` for Reject. Closing the notification is Reject. When the wait elapses, the helper removes the notification and sends nothing, and the server reports `timeout`. When notifications are disabled, or the system refuses the banner, the helper answers `error` `confirm_unavailable` and the action does not run. A sensitive action is sent to the extension only after Accept, with `confirmed: true`.
+
+`UNUserNotificationCenter` is what the extension note names. macOS 12 refuses that call for this ad-hoc helper (`Notifications are not allowed for this application`), so the helper posts the same banner with `NSUserNotification`, including Accept and Reject. The binary is installed as `helper/bin/gc-helper.app` (bundle id `com.yacfish.ground-control.helper`) because a bare executable cannot show a banner. `bin/gc-helper` execs that app. A banner the system does not deliver is answered with `confirm_unavailable`.
 
 ---
 
@@ -412,7 +417,7 @@ The server sends `confirm.show`. A mapping confirm waits 30 s (`timeoutMs` 30000
 - **Automation** (Apple Events → System Events) is **not required** for v1 menus; invocation is Accessibility-only.
 - **Apps surface needs no extra permission**: listing running apps, reading the Dock's preferences (`com.apple.dock`, readable by the logged-in user's non-sandboxed processes), scanning the Applications folders and launching apps are all unprivileged. No Full Disk Access, no Automation.
 - No Screen Recording permission: there is no screen capture. Zoom presets need no extra permission either (they read `com.apple.universalaccess` / `com.apple.symbolichotkeys`, post events under the Accessibility grant, or call the private WindowServer zoom).
-- **Notifications** are for the Chrome extension pairing code and for its Accept / Reject confirms (§7). Not built. When they are turned off for the helper, a confirm does not run and the server reports `confirm_unavailable`.
+- **Notifications** (System Settings → Notifications → Ground Control) are for the Chrome extension pairing code and for its Accept / Reject confirms (§7, helper 0.9.0). The first pairing or confirm asks. When they are turned off, the helper answers `confirm_unavailable` and the action does not run.
 - Must run inside the logged-in graphical session (not over SSH), like ClipBridge.
 - Known SSH-only limitation: outside a GUI login, creating events from a `CGEventSource(stateID: .hidSystemState)` can block for more than 3 s, while nil-source events are created in ~12 ms. The zoom exit fallback and the release modifier sweep use nil-source events; the zoom key / scroll events and the rest of `InputController` (pointer, keys, text) use the HID-state source, which works in the GUI session (the zoom creates it lazily on its own queue, never on the main thread). CoreMIDI client creation also fails without a GUI session (e.g. `268435459`).
 
@@ -433,7 +438,7 @@ The server sends `confirm.show`. A mapping confirm waits 30 s (`timeoutMs` 30000
 
 **v0: docs.** SPEC + README. ✅
 
-**v1: Node + Swift helper** (current build, helper 0.8.2)
+**v1: Node + Swift helper** (current build, helper 0.9.0)
 1. Node server: static client, token, WebSocket, heartbeat, ownership, release-everything path. ✅
 2. Swift helper: pointer / click / scroll / text / keys with CGEvent; Accessibility check. ✅
 3. Client: trackpad + keyboard with sticky modifiers, echo, auto-repeat. ✅
@@ -456,7 +461,7 @@ The server sends `confirm.show`. A mapping confirm waits 30 s (`timeoutMs` 30000
 - MIDI feedback (virtual destination → phone LEDs).
 - Gesture shortcuts (three-finger swipe ⇒ Mission Control / switch Spaces).
 - Bonjour discovery for the QR/bookmark flow.
-- Chrome extension (`ext/1`, specified in ground-control-app-hooks `chrome/HELPER.md`, not built). The extension talks to the Node server. The helper shows a pairing-code notification and an Accept / Reject notification (`confirm.show` / `confirm.result`). It does not fetch presets.
+- Chrome extension (`ext/1`, specified in ground-control-app-hooks `chrome/HELPER.md`). The extension talks to the Node server. Helper 0.9.0 shows the pairing-code notification (`pair.show`) and the Accept / Reject notification (`confirm.show` / `confirm.result`). The server does not send them yet. The helper does not fetch presets.
 
 ---
 
@@ -481,7 +486,7 @@ The server sends `confirm.show`. A mapping confirm waits 30 s (`timeoutMs` 30000
 | No hosted CI (GitHub Actions removed): `npm run check` and, on a Mac, `npm run check:helper` before pushing | Locked |
 | Final product (§2.1): free notarized Mac menu-bar app off the store + App Store iPhone app (free trackpad and keys, Pro in-app purchase). The Mac gates Pro commands after a signed StoreKit transaction. The browser page stays the free remote | Locked |
 | Editable grids: MIDI chooses its column and row counts. The Deck uses fixed 50×50 cells, separate width and height, and pages. Both are in this build (§6.2, §6.3). Deck buttons still cannot send every helper command the plan lists | Locked |
-| Chrome extension confirms and the pairing code are macOS notifications from the helper (`confirm.show` / `confirm.result`, Accept and Reject). Protocol `ext/1` in ground-control-app-hooks. The helper does not talk to the extension and does not fetch presets | Specified, not built |
+| Chrome extension confirms and the pairing code are macOS notifications from the helper (`pair.show`, `confirm.show` / `confirm.result`, Accept and Reject). Protocol `ext/1` in ground-control-app-hooks. The helper does not talk to the extension and does not fetch presets. Helper 0.9.0 posts the banners. The server does not send them yet | Helper built |
 
 ---
 
@@ -489,7 +494,7 @@ The server sends `confirm.show`. A mapping confirm waits 30 s (`timeoutMs` 30000
 
 - `npm test`: end-to-end protocol smoke test (`scripts/smoke-test.js`) against `scripts/mock-helper.js`; runs on Linux, no Mac needed. Also unit-checks `src/keysModel.js` (echo, diff, repeat timing) and `src/menuModel.js`.
 - `npm run check`: `npm test` then `npm run build`. Run before every push; there is no hosted CI.
-- `npm run check:helper` (`scripts/check-helper.sh`, macOS only, skips elsewhere): builds the helper with `scripts/build-helper.sh` and checks `ready`, refusal of unconfirmed sleep / shut down, `textfocus.watch` / `cursor.scale`, the zoom capability with a read-only `zoom.get` and the helper version, prompt exit on SIGTERM, the Apps probe, MIDI with all-notes-off, and `menu.get` / `menu.invoke bad_path`. GUI-session-only steps print `WARN` and are skipped instead of failing when there is no GUI session (e.g. over SSH): MIDI when CoreMIDI client creation fails, and the Apps probe when `launchctl managername` is not `Aqua` (or MIDI already showed there is no GUI session).
+- `npm run check:helper` (`scripts/check-helper.sh`, macOS only, skips elsewhere): builds the helper with `scripts/build-helper.sh` and checks `ready`, refusal of unconfirmed sleep / shut down, `textfocus.watch` / `cursor.scale`, the zoom capability with a read-only `zoom.get`, helper 0.9.0 with `notify`, a bad `confirm.show` / `pair.show` and an answer to a real one, prompt exit on SIGTERM, the Apps probe, MIDI with all-notes-off, and `menu.get` / `menu.invoke bad_path`. GUI-session-only steps print `WARN` and are skipped instead of failing when there is no GUI session (e.g. over SSH): MIDI when CoreMIDI client creation fails, and the Apps probe when `launchctl managername` is not `Aqua` (or MIDI already showed there is no GUI session).
 - `node scripts/helper-probe.js --verbose`: real helper lists Dock / Applications / running apps and one icon (read-only).
 - `node scripts/zoom-probe.js`: prints the `closeView*` keys and which zoom methods the helper sees (read-only). `method <auto|private|keys|scroll> <1|2|4> [--from N]` does what a button does with that method; `private <factor>` sets the private zoom (kept 5 s, `--hold N`, then the helper exits and resets it); `keys <n>` posts n shortcut presses (negative = out); `once <delta>` posts one modifier + scroll event. Tuning flags match config.json `zoom`. Run it in the GUI session.
 - The helper must stay buildable with Swift 5.7 / Xcode 14.2 on macOS 12.
