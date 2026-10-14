@@ -233,6 +233,7 @@ Helper 0.9.0 posts the Chrome extension banners. The note is `chrome/HELPER.md` 
 - `confirm.show {id, title, body, timeoutMs?}` posts one notification with Accept and Reject. The title is the control name. The body is the type and the site, for example `button on youtube.com`. A new or edited mapping waits 30 s. A sensitive action waits 15 s. The helper answers `confirm.shown` when the banner is up. macOS 12 will not let this ad-hoc helper use UserNotifications, so the banner is posted with the older notification center, from `helper/bin/gc-helper.app`.
 - `confirm.result {id, accepted}` is the answer. Closing the notification is Reject. On timeout the helper removes the banner and sends nothing. When notifications are off, the helper answers `error` `confirm_unavailable` and the action does not run.
 - The helper does not fetch presets, and it needs no new message for which app is in front. The first banner asks for notification permission.
+- App hooks use the same banners. `HOOKS.md` in that repo is protocol `hook/1`. `npm run hook:pair` prints a code and the server sends `pair.show`. `npm run hook:revoke -- <name>` removes the hashed token in `hook-clients.json`. Blender's add-on still speaks `blender/1` (no `app` field). The Deck tab shows the hook while that app is in front, and Chrome's deck while Chrome is in front. `ext.state` and `hook.state` are forwarded to the phone and not stored. A secret text field on a deck or a panel is masked. The deck file keeps a reference, not the text. The phone sends it once, as `key.text` with `secret: true` or as a hook action, and the server does not log it.
 
 Errors that come back from the helper carry `ref: <request type>` (e.g. `menu.get`, `menu.invoke`, `deck.run`).
 
@@ -240,8 +241,8 @@ App icons fall back to a letter tile when the helper returns no PNG; an `.icns`-
 
 ## Layout
 ```
-server/      Node: index.js, session.js (sessions, prefs, routing, cursor timeout, zoom state), extension.js (ext/1 chrome client), helper.js, config.js, decks.js (load + resolve deck.run)
-src/         React client: App.jsx (tabs, top menu, auto Keys), connection.js, Trackpad.jsx, Keys.jsx + keysModel.js, Deck.jsx, Midi.jsx,
+server/      Node: index.js, session.js (sessions, prefs, routing, cursor timeout, zoom state), extension.js (ext/1 chrome client), hooks.js (hook/1 app hooks, Blender alias), helper.js, config.js, decks.js (load + resolve deck.run)
+src/         React client: App.jsx (tabs, top menu, auto Keys), connection.js, Trackpad.jsx, Keys.jsx + keysModel.js, Deck.jsx, LiveDeck.jsx (Chrome and app-hook decks), Midi.jsx,
              Apps.jsx (+ icons.js cache), Menus.jsx + menuModel.js, Preferences.jsx + prefs.js, styles.css
 decks/       Built-in shortcut deck JSON (system + per-app)
 helper/      Swift package gc-helper: Input, Keys, Cursor, Menu (AXPress), Apps, MIDI (CoreMIDI virtual source), System (sleep / shut down),

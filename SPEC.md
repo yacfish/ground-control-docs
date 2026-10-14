@@ -420,7 +420,19 @@ The Chrome extension is a separate client in [ground-control-app-hooks](https://
 
 The server sends `confirm.show`. A mapping confirm waits 30 s. A sensitive action waits 15 s. The helper answers `confirm.shown` once the banner is up, then `confirm.result` with `accepted: true` for Accept and `accepted: false` for Reject. Closing the notification is Reject. When the wait elapses, the helper removes the notification and sends nothing, and the server reports `timeout`. When notifications are disabled, or the system refuses the banner, the helper answers `error` `confirm_unavailable` and the action does not run. A sensitive action is sent to the extension only after Accept, with `confirmed: true`.
 
+`ext.state` is the live playback position (`currentTime`, `duration`, `paused`, `volume`, `muted`, `playbackRate`). The server forwards it to phones and does not store or log it. A slider whose chain contains `{kind: "media", op: "position"}` seeks in seconds. `ext.focus` `state.media` no longer carries `currentTime`. An optional `icon` on a mapping or a rule is a `data:image/png;base64,` URL of at most 4096 characters, stored and shown, never used for matching.
+
 `UNUserNotificationCenter` is what the extension note names. macOS 12 refuses that call for this ad-hoc helper (`Notifications are not allowed for this application`), so the helper posts the same banner with `NSUserNotification`, including Accept and Reject. The binary is installed as `helper/bin/gc-helper.app` (bundle id `com.yacfish.ground-control.helper`) because a bare executable cannot show a banner. `bin/gc-helper` execs that app. A banner the system does not deliver is answered with `confirm_unavailable`.
+
+### App hooks (hook/1)
+
+Blender, OBS, VLC, GIMP, Inkscape, Godot, and Spotify connect as `device: "hook"` with an `app` id. The note is `HOOKS.md` in the same repo, protocol `hook/1`. Blender's add-on still speaks `blender/1`: the same messages with no `app` field, and the server answers in that shape. A hook is not a phone. It never takes the pointer, and its pointer, key, and other phone commands are dropped.
+
+`npm run hook:pair` and `npm run hook:revoke -- <name>` use the phone token. The 6-digit code is printed by the server and sent with `pair.show`. The phone's reply does not include it. Tokens are SHA-256 hashes in `hook-clients.json` (mode 0600). A token works for one app only. Connections are from this Mac unless `hooks.allowRemote` is set. An http or extension Origin is refused.
+
+The Deck tab shows that app's deck while it is frontmost and connected, or Chrome's deck while Chrome is front and a page deck is available. Pin keeps an app deck up. App deck returns to the shortcut deck until the focused app changes. `hook.state` (playback and levels) is forwarded to phones and not stored or logged. A position slider seeks in seconds. Panels (`hook.panel`) open from the phone and stay in memory only while a phone is showing them. A sensitive control uses the same Accept / Reject banner as Chrome. The body is the control type and the deck title, for example `button in Scene`.
+
+A deck text button may set `secret: true`. The deck file stores `secretRef` and, when the user recorded them, `expectBundle` and `expectName`. It does not store the text. The phone types it with `key.text` and `secret: true`. The server forwards that once and does not log it. `deck.run` does not expand a secret. A hook text control or panel text field with `secret: true` is the same idea: the value is left out of the cached panel, and the phone sends it on `hook.action`. This page keeps the value in memory for the visit. The later Capacitor wrap stores it in the Keychain or Keystore and asks for a biometric, or the device passcode, before reveal or send. Copy clears the clipboard after 20 seconds. iOS may ignore that clear. The LAN WebSocket is the existing connection and is not additionally encrypted. Customer-facing terms should say that a secret is typed into the focused field and is not written into the deck. Counsel should review that wording.
 
 ---
 
@@ -430,7 +442,7 @@ The server sends `confirm.show`. A mapping confirm waits 30 s. A sensitive actio
 - **Automation** (Apple Events → System Events) is **not required** for v1 menus; invocation is Accessibility-only.
 - **Apps surface needs no extra permission**: listing running apps, reading the Dock's preferences (`com.apple.dock`, readable by the logged-in user's non-sandboxed processes), scanning the Applications folders and launching apps are all unprivileged. No Full Disk Access, no Automation.
 - No Screen Recording permission: there is no screen capture. Zoom presets need no extra permission either (they read `com.apple.universalaccess` / `com.apple.symbolichotkeys`, post events under the Accessibility grant, or call the private WindowServer zoom).
-- **Notifications** (System Settings → Notifications → Ground Control) are for the Chrome extension pairing code and for its Accept / Reject confirms (§7, helper 0.9.0). The first pairing or confirm asks. When they are turned off, the helper answers `confirm_unavailable` and the action does not run.
+- **Notifications** (System Settings → Notifications → Ground Control) are for Chrome and app-hook pairing codes and for their Accept / Reject confirms (§7, helper 0.9.0). The first pairing or confirm asks. When they are turned off, the helper answers `confirm_unavailable` and the action does not run.
 - Must run inside the logged-in graphical session (not over SSH), like ClipBridge.
 - Known SSH-only limitation: outside a GUI login, creating events from a `CGEventSource(stateID: .hidSystemState)` can block for more than 3 s, while nil-source events are created in ~12 ms. The zoom exit fallback and the release modifier sweep use nil-source events; the zoom key / scroll events and the rest of `InputController` (pointer, keys, text) use the HID-state source, which works in the GUI session (the zoom creates it lazily on its own queue, never on the main thread). CoreMIDI client creation also fails without a GUI session (e.g. `268435459`).
 
@@ -443,6 +455,7 @@ The server sends `confirm.show`. A mapping confirm waits 30 s. A sensitive actio
 - `config.json`: port, sensitivity, acceleration, cursor mode (`system`/`off`) and scale, cursor timeout, idle timeout, MIDI source name, `zoom` tuning (§6.8)
 - `decks/*.json`: user decks (override / extend built-ins by bundle ID)
 - `cursor-restore.json`: pre-session cursor scale (crash recovery)
+- `ext-clients.json`, `hook-clients.json`: SHA-256 token hashes for the Chrome extension and for app hooks (mode 0600). `extension.allowRemote` and `hooks.allowRemote` default to off.
 - `library/decks/<name>.json`, `library/midi/<name>.json`: saved layouts, one JSON file per deck or MIDI layout. The filename is the unique layout name. The phone saves and loads them from the share sheet. See [docs/multi-client.md](docs/multi-client.md). Distinct from `decks/`.
 
 ---
@@ -474,7 +487,7 @@ The server sends `confirm.show`. A mapping confirm waits 30 s. A sensitive actio
 - MIDI feedback (virtual destination → phone LEDs).
 - Gesture shortcuts (three-finger swipe ⇒ Mission Control / switch Spaces).
 - Bonjour discovery for the QR/bookmark flow.
-- Chrome extension (`ext/1`, specified in ground-control-app-hooks `chrome/HELPER.md`). The extension talks to the Node server. The server accepts a `chrome` client on `/ws`, checks the extension origin, pairs it with a hashed token, and sends `pair.show` and `confirm.show`. A preset version change is forwarded to the phone. The helper does not fetch presets. The phone deck for Chrome is not built yet.
+- Chrome extension (`ext/1`) and app hooks (`hook/1`), specified in ground-control-app-hooks. The server accepts both on `/ws`, pairs them with a hashed token, and sends `pair.show` and `confirm.show`. The Deck tab shows the live deck. The helper does not fetch presets.
 
 ---
 
@@ -499,13 +512,14 @@ The server sends `confirm.show`. A mapping confirm waits 30 s. A sensitive actio
 | No hosted CI (GitHub Actions removed): `npm run check` and, on a Mac, `npm run check:helper` before pushing | Locked |
 | Final product (§2.1): free notarized Mac menu-bar app off the store + App Store iPhone app (free trackpad and keys, Pro in-app purchase). The Mac gates Pro commands after a signed StoreKit transaction. The browser page stays the free remote | Locked |
 | Editable grids: MIDI chooses its column and row counts. The Deck uses fixed 50×50 cells, separate width and height, and pages. Both are in this build (§6.2, §6.3). Deck buttons still cannot send every helper command the plan lists | Locked |
-| Chrome extension confirms and the pairing code are macOS notifications from the helper (`pair.show`, `confirm.show` / `confirm.result`, Accept and Reject). Protocol `ext/1` in ground-control-app-hooks. The server sends those messages, drops chrome input, and forwards preset versions to the phone. The helper does not talk to the extension and does not fetch presets | Server wired |
+| Chrome extension confirms and the pairing code are macOS notifications from the helper (`pair.show`, `confirm.show` / `confirm.result`, Accept and Reject). Protocol `ext/1` in ground-control-app-hooks. The server sends those messages, drops chrome input, forwards preset versions, and forwards `ext.state` without storing it. The helper does not talk to the extension and does not fetch presets | Server wired |
+| App hooks (`hook/1`, Blender still `blender/1`) pair the same way. The server forwards decks, panels, and `hook.state` without storing playback state. The Deck tab shows the hook while that app is in front | Server wired |
 
 ---
 
 ## 12. Development and verification
 
-- `npm test`: end-to-end protocol smoke test (`scripts/smoke-test.js`) against `scripts/mock-helper.js`; runs on Linux, no Mac needed. Also unit-checks `src/keysModel.js` (echo, diff, repeat timing), `src/menuModel.js`, and the Chrome extension client (`scripts/extension-test.js`, `scripts/mock-extension.js`).
+- `npm test`: end-to-end protocol smoke test (`scripts/smoke-test.js`) against `scripts/mock-helper.js`; runs on Linux, no Mac needed. Also unit-checks `src/keysModel.js` (echo, diff, repeat timing), `src/menuModel.js`, the Chrome extension client (`scripts/extension-test.js`, `scripts/mock-extension.js`), and app hooks (`scripts/hook-test.js`, `scripts/mock-hook.js`).
 - `npm run check`: `npm test` then `npm run build`. Run before every push; there is no hosted CI.
 - `npm run check:helper` (`scripts/check-helper.sh`, macOS only, skips elsewhere): builds the helper with `scripts/build-helper.sh` and checks `ready`, refusal of unconfirmed sleep / shut down, `textfocus.watch` / `cursor.scale`, the zoom capability with a read-only `zoom.get`, helper 0.9.0 with `notify`, a bad `confirm.show` / `pair.show` and an answer to a real one, prompt exit on SIGTERM, the Apps probe, MIDI with all-notes-off, and `menu.get` / `menu.invoke bad_path`. GUI-session-only steps print `WARN` and are skipped instead of failing when there is no GUI session (e.g. over SSH): MIDI when CoreMIDI client creation fails, and the Apps probe when `launchctl managername` is not `Aqua` (or MIDI already showed there is no GUI session).
 - `node scripts/helper-probe.js --verbose`: real helper lists Dock / Applications / running apps and one icon (read-only).
