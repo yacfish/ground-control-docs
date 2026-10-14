@@ -45,6 +45,10 @@ Saved phone decks and MIDI layouts are a different folder, `library/` under the 
 | `sleep` | — | `system.sleep` (IOKit `IOPMSleepSystem`, like  → Sleep) — **confirm required** |
 | `shutdown` | — | `system.shutdown` (`kAEShutDown` Apple Event to loginwindow, like  → Shut Down; not AppleScript) — **confirm required** |
 
+### Labels
+
+A button whose action is `{ "type": "label" }` is a group heading: the Deck tab shows its `label` as text and a press does nothing (the phone never sends `deck.run` for it). The built-in app decks use labels to group their buttons, for example Tools, Edit, View. A label still takes a grid cell.
+
 ### Confirmation (dangerous buttons)
 
 Buttons whose action is `sleep` / `shutdown`, or any action with `"confirm": true` (including a `sequence` containing one), are sent to the phone with `confirm: true`. The Deck tab shows a confirm sheet (optional per-button `"confirmText"`); only **OK** sends `{ "t": "deck.run", deckId, buttonId, "confirmed": true }`, which then executes immediately. The server answers an unconfirmed run with `error confirm_required` and sends nothing to the helper; the helper itself also refuses `system.sleep` / `system.shutdown` without `confirmed: true`. Clients cannot send `system.*` directly (only via a deck button). A deck button does not need the trackpad: another phone can run it while someone else holds the pointer. One phone alone still engages on `deck.run`, as it does for any other action.
@@ -68,3 +72,31 @@ Named keys the helper understands include: `space`, `tab`, `return`, `escape`, `
 ## Wire
 
 On hello and on `focus.changed`, the server pushes `{ "t": "decks", "system": {...}, "app": {...}|null }`. The client sends `{ "t": "deck.run", "deckId", "buttonId" }`; the server engages the session if needed and talks to the helper. The helper never receives raw `deck.run`.
+
+## Built-in app decks and matching
+
+A deck matches the frontmost app only when its `bundleId` is exactly equal to that app's bundle id. There is no prefix or wildcard match. Most apps keep one bundle id across versions (`com.adobe.Photoshop`, `com.adobe.illustrator`, `com.adobe.AfterEffects`). Premiere Pro puts the major version in its id, so there is one file per version: `com.adobe.PremierePro.25` (2025) and `com.adobe.PremierePro.26` (2026), with the same buttons. Another Premiere version needs a copy of that file with its own `id` and `bundleId`. To check an app's id on the Mac: `osascript -e 'id of app "Adobe Premiere Pro 2025"'` or `mdls -name kMDItemCFBundleIdentifier /Applications/<App>.app`.
+
+Apple apps (Finder, Preview, QuickTime Player, Keynote) and Max use `menu` buttons, because AXPress by title path survives shortcut changes. Pro apps whose menus are not standard or whose titles change with state (Photoshop tools, Premiere, After Effects, Resolve, Blender, Ableton Live, Zoom, Slack) mostly use `key` buttons with each app's default shortcuts. A user who remapped a shortcut edits the deck on the phone or drops an override file.
+
+## Not yet verified on a Mac
+
+These decks were written from each app's documented defaults and menu titles, not tested on a Mac. Check them before relying on them:
+
+- **Bundle ids**: `com.adobe.PremierePro.25` / `.26` (versioned), `com.adobe.AfterEffects`, `com.blackmagic-design.DaVinciResolve`, `com.ableton.live`, `us.zoom.xos`, `com.tinyspeck.slackmacgap`, `org.blenderfoundation.blender`.
+- **QuickTime Player**: menu paths `View > Loop`, `Edit > Split Clip`, `File > New Audio Recording`, `File > Export As > 1080p…` (the export submenu only lists sizes the movie supports). Arrow keys step a frame only while paused.
+- **Finder**: `View > Show Preview` and `View > as Gallery` (macOS 10.14 and later). Toggle items change title (Show / Hide Path Bar), so the second press of Path Bar and Preview Pane may need the Hide title.
+- **Preview**: `View > Zoom to Fit`, `View > Slideshow`, `View > Show Markup Toolbar`, `Tools > Crop` (dimmed without a selection).
+- **Photoshop**: menu titles `View > 100%` (older versions say Actual Pixels), `Edit > Free Transform`, `Layer > Merge Down` (says Merge Layers with several layers selected). Tool keys cycle through grouped tools when Use Shift Key for Tool Switch is off.
+- **Illustrator**: `View > Fit Artboard in Window`, `View > Actual Size`; Artboard tool ⇧O.
+- **Premiere Pro**: Ripple Trim Q / W, Maximize Panel `` ` ``, Export ⌘M (opens the Export mode in 2023 and later), `\` to fit the sequence.
+- **After Effects**: frame step with Page Up / Page Down, Trim In / Out ⌥[ / ⌥], Split Layer ⌘⇧D, menu titles `Composition > New Composition…` and `Composition > Add to Render Queue`.
+- **DaVinci Resolve**: page keys ⇧4 Edit, ⇧6 Color, ⇧8 Deliver; Insert F9, Overwrite F10 (macOS may take F9 to F10 as media keys unless Use F1, F2 as standard function keys is on); Split Clip ⌘B; Zoom to Fit ⇧Z.
+- **Blender**: keys follow the default keymap with the mouse over the 3D viewport or timeline; Blender has no native macOS menus, so this deck uses keys only. Frame All uses Home.
+- **Max**: object keys N, M, C, T, B work only in an unlocked patcher. Existing menu titles (`File > Save…`, `View > Zoom in`) came from the earlier deck and are still unchecked against Max 8 and 9.
+- **Ableton Live**: Record F9 (same function key caveat), Draw Mode B, MIDI Clip ⌘⇧M, Rename ⌘R, Detail View ⇧Tab.
+- **Keynote**: `Play > Play Slideshow`, `Play > Rehearse Slideshow`, `Slide > Skip Slide`, `View > Navigator` / `Light Table`, `View > Show Presenter Notes`.
+- **Zoom**: default meeting shortcuts (⌘⇧A, ⌘⇧V, ⌘⇧S, ⌘⇧T, ⌘⇧W, ⌘⇧F, ⌘⇧H, ⌘U, ⌘⇧R, ⌘⇧P, ⌥Y). They work only in a meeting window, and some can be turned off in Zoom's settings.
+- **Slack**: Next Unread ⌥⇧↓, Huddle ⌘⇧H, Set Status ⌘⇧Y, Activity ⌘⇧M, and the React +1 text button (types `+:+1:`, which reacts to the last message only when the message box is focused; press Return after it).
+
+The Safari deck is unchanged in this set: `scripts/smoke-test.js` pins it to its 10 buttons on one page, so growing it needs that test updated first.
