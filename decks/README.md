@@ -73,30 +73,56 @@ Named keys the helper understands include: `space`, `tab`, `return`, `escape`, `
 
 On hello and on `focus.changed`, the server pushes `{ "t": "decks", "system": {...}, "app": {...}|null }`. The client sends `{ "t": "deck.run", "deckId", "buttonId" }`; the server engages the session if needed and talks to the helper. The helper never receives raw `deck.run`.
 
-## Built-in app decks and matching
+## Blender deck (`org.blenderfoundation.blender.json`)
 
-A deck matches the frontmost app only when its `bundleId` is exactly equal to that app's bundle id. There is no prefix or wildcard match. Most apps keep one bundle id across versions (`com.adobe.Photoshop`, `com.adobe.illustrator`, `com.adobe.AfterEffects`). Premiere Pro puts the major version in its id, so there is one file per version: `com.adobe.PremierePro.25` (2025) and `com.adobe.PremierePro.26` (2026), with the same buttons. Another Premiere version needs a copy of that file with its own `id` and `bundleId`. To check an app's id on the Mac: `osascript -e 'id of app "Adobe Premiere Pro 2025"'` or `mdls -name kMDItemCFBundleIdentifier /Applications/<App>.app`.
+The Blender deck follows Blender's own UI order and is split into four pages of exactly 16 entries each, labels and hook slots included:
 
-Apple apps (Finder, Preview, QuickTime Player, Keynote) and Max use `menu` buttons, because AXPress by title path survives shortcut changes. Pro apps whose menus are not standard or whose titles change with state (Photoshop tools, Premiere, After Effects, Resolve, Blender, Ableton Live, Zoom, Slack) mostly use `key` buttons with each app's default shortcuts. A user who remapped a shortcut edits the deck on the phone or drops an override file.
+| Page | Groups, in order | Color |
+| --- | --- | --- |
+| 1 Navigation and views | View, Viewpoint, Orbit, Pan and Zoom | Navigation `hsl(216 75% 50%)` |
+| 2 Modes, tools and shading | Mode | Modes `hsl(288 75% 50%)` |
+| | Tools (toolbar top to bottom), Snap and Overlays (header, left to right), Shading (header order) | Tools and shading `hsl(180 75% 50%)` |
+| 3 Editing and modeling | Edit, Select, Add, Object and Mesh (header menus left to right) | Editing `hsl(36 75% 50%)` |
+| 4 Playback and render | Keying, Transport (Timeline header order), Render | Playback and render `hsl(108 75% 50%)` |
 
-## Not yet verified on a Mac
+Every group starts with a `label` button. Colors use the existing per-element fields from `src/deckLayout.js` (`DECK_SWATCHES`, `deckSwatch`, `cleanWidget`): `color` on labels and `border` on key buttons, each one of the swatch values. There is no deck or page background color, and none is added.
 
-These decks were written from each app's documented defaults and menu titles, not tested on a Mac. Check them before relying on them:
+Blender draws its own menus, so they are not in the macOS menu bar and `menu` buttons cannot reach them. Everything here is a `key` button, and Blender sends a key to the editor under the mouse pointer, so keep the pointer over the 3D Viewport (or the Timeline for its keys).
 
-- **Bundle ids**: `com.adobe.PremierePro.25` / `.26` (versioned), `com.adobe.AfterEffects`, `com.blackmagic-design.DaVinciResolve`, `com.ableton.live`, `us.zoom.xos`, `com.tinyspeck.slackmacgap`, `org.blenderfoundation.blender`.
-- **QuickTime Player**: menu paths `View > Loop`, `Edit > Split Clip`, `File > New Audio Recording`, `File > Export As > 1080p…` (the export submenu only lists sizes the movie supports). Arrow keys step a frame only while paused.
-- **Finder**: `View > Show Preview` and `View > as Gallery` (macOS 10.14 and later). Toggle items change title (Show / Hide Path Bar), so the second press of Path Bar and Preview Pane may need the Hide title.
-- **Preview**: `View > Zoom to Fit`, `View > Slideshow`, `View > Show Markup Toolbar`, `Tools > Crop` (dimmed without a selection).
-- **Photoshop**: menu titles `View > 100%` (older versions say Actual Pixels), `Edit > Free Transform`, `Layer > Merge Down` (says Merge Layers with several layers selected). Tool keys cycle through grouped tools when Use Shift Key for Tool Switch is off.
-- **Illustrator**: `View > Fit Artboard in Window`, `View > Actual Size`; Artboard tool ⇧O.
-- **Premiere Pro**: Ripple Trim Q / W, Maximize Panel `` ` ``, Export ⌘M (opens the Export mode in 2023 and later), `\` to fit the sequence.
-- **After Effects**: frame step with Page Up / Page Down, Trim In / Out ⌥[ / ⌥], Split Layer ⌘⇧D, menu titles `Composition > New Composition…` and `Composition > Add to Render Queue`.
-- **DaVinci Resolve**: page keys ⇧4 Edit, ⇧6 Color, ⇧8 Deliver; Insert F9, Overwrite F10 (macOS may take F9 to F10 as media keys unless Use F1, F2 as standard function keys is on); Split Clip ⌘B; Zoom to Fit ⇧Z.
-- **Blender**: keys follow the default keymap with the mouse over the 3D viewport or timeline; Blender has no native macOS menus, so this deck uses keys only. Frame All uses Home.
-- **Max**: object keys N, M, C, T, B work only in an unlocked patcher. Existing menu titles (`File > Save…`, `View > Zoom in`) came from the earlier deck and are still unchecked against Max 8 and 9.
-- **Ableton Live**: Record F9 (same function key caveat), Draw Mode B, MIDI Clip ⌘⇧M, Rename ⌘R, Detail View ⇧Tab.
-- **Keynote**: `Play > Play Slideshow`, `Play > Rehearse Slideshow`, `Slide > Skip Slide`, `View > Navigator` / `Light Table`, `View > Show Presenter Notes`.
-- **Zoom**: default meeting shortcuts (⌘⇧A, ⌘⇧V, ⌘⇧S, ⌘⇧T, ⌘⇧W, ⌘⇧F, ⌘⇧H, ⌘U, ⌘⇧R, ⌘⇧P, ⌥Y). They work only in a meeting window, and some can be turned off in Zoom's settings.
-- **Slack**: Next Unread ⌥⇧↓, Huddle ⌘⇧H, Set Status ⌘⇧Y, Activity ⌘⇧M, and the React +1 text button (types `+:+1:`, which reacts to the last message only when the message box is focused; press Return after it).
+### Hook slots
 
-The Safari deck is unchanged in this set: `scripts/smoke-test.js` pins it to its 10 buttons on one page, so growing it needs that test updated first.
+Buttons with ids `hook-<controlId>` are `label` placeholders with a blank label (`" "`). Each one marks where a control of the Blender add-on (`blender.deck` from ground-control-app-hooks `blender/`) belongs. Without the add-on they show as empty cells, which keeps the page breaks in place.
+
+| Page | Slot | Hook control |
+| --- | --- | --- |
+| 1 | after Fly / Walk | `view.all` (Frame All) |
+| 1 | after the Viewpoint label | `view` list (Camera, Top, Bottom, Front, Back, Right, Left, the View > Viewpoint order) |
+| 1 | Orbit | `orbit.yaw`, `orbit.pitch` (nudge, 15 deg) |
+| 1 | Pan and Zoom | `pan.x`, `pan.y`, `zoom` (nudge) |
+| 2 | after the Mode label | `mode` list |
+| 2 | after the Tools label | `tool` list |
+| 2 | after the Shading label | `shading` list (Wireframe, Solid, Material Preview, Rendered) |
+| 3 | Edit | `undo`, `redo` |
+| 4 | Keying | `key.insert`, `key.delete` |
+| 4 | Transport | `frame.start`, (key) Previous Keyframe, `frame.prev`, `play`, `frame.next`, (key) Next Keyframe, `frame.end`, `frame`, `frame.goto` |
+| 4 | Render | `render.still`, `render.anim` (sensitive, confirm on the Mac) |
+
+The hook's `location.*`, `rotation_euler.*` and `scale.*` sliders have no slot and stay in the add-on's own Controls view.
+
+### PROPOSAL for the agent wiring the server and phone (not implemented)
+
+Nothing in `server/` or `src/` is changed by this deck. What the loader does today, and what would make the deck work as designed:
+
+1. **Colors are dropped on the wire.** `deckPayload` in `server/decks.js` only sends `id`, `label`, `action` and the confirm fields, so `color` and `border` in a deck file never reach `cleanWidget` on the phone. Passing through `color`, `border`, `alignH`, `alignV` and `fontSize` when present would show them. The phone already validates them against `DECK_SWATCHES`.
+2. **Pages are not explicit.** `pagesFromButtons` fills pages by the phone's grid (buttons are `floor(cols / 2)` cells wide, one row high), so 16 entries per page only holds on a grid of 2 columns by 8 rows. A taller phone (the smoke test's 400 x 600 gives 7 x 10, so 20 per page) would shift the breaks. Suggested: an optional `{ "action": { "type": "pageBreak" } }` entry, or a top-level `pages` array, that `pagesFromButtons` honors.
+3. **Merging the hook.** When `blender.deck` is live and Blender is frontmost, the phone replaces each `hook-<controlId>` placeholder with the matching hook control (same cell, color taken from the placeholder, since `blender.deck` has no color), and renders it with the Chrome deck widgets for its type. Nudge-style sliders (`next`, `prev`, `nudge` only) are best drawn as two arrow buttons. A placeholder whose control is missing stays blank. Hook controls with no placeholder (the transform sliders) go into a Controls sheet. `blender.deck` also sends `page` and `group` per control, which match this table.
+4. A blank label is `" "` because `deckPayload` turns an empty label into the button id.
+
+### Not verified on a Mac
+
+- None of these keys has been tried in Blender through Ground Control. Defaults are from the Blender 4.x keymap.
+- Fly / Walk (Shift + `) and View Pie (`): Blender binds the accent grave key. On a Belgian AZERTY layout the helper resolves `` ` `` through the current layout, and that may not be the key Blender expects.
+- Wireframe Toggle as Shift Z (Blender 2.8+; older builds used Z alone), X-Ray as Option Z (Alt Z in Blender), Overlays not included.
+- Previous / Next Keyframe as Down / Up arrow (Blender 4.x; 2.8 to 3.x also used Up / Down for jumping keyframes, check the direction).
+- Deselect All as Option A (Alt A), Invert as Ctrl I, Mode Pie as Ctrl Tab, Snap as Shift Tab, Tool Menu as Shift Space, Zoom Region as Shift B.
+- Cmd versus Ctrl: Blender on macOS maps some Ctrl shortcuts to Cmd. Ctrl was kept where the Blender keymap says Ctrl.
