@@ -214,9 +214,9 @@ Extra messages beyond SPEC §7:
 - helper → server: `ready {version, accessibility, cursorScale, midi, midiSourceName, textFocus, zoom, zoomMotion}`, `textfocus {editable, role?, subrole?, pid?}`, `textfocus.status {ok, watching, reason?}`, `zoom.state {level, from?, method, requested?, fallback?, presses?, delta?, privateFactor?, before?, factor?, ok, error?, hotkeys?, privateAPI?, scrollZoom?, motion?, active?, reason?, ms?}` (`mode: motion` for Zoom during motion, `mode: reset` when a private zoom was reset).
 - client → helper: `midi.transport {cmd: start|stop|continue}` (system realtime).
 
-Helper 0.9.0 posts the Chrome extension banners. The note is `chrome/HELPER.md` in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks), protocol `ext/1`. The extension talks to the Node server. The server does not send these yet. The helper only posts macOS notifications (`ready.notify`):
+Helper 0.9.0 posts the Chrome extension banners. The note is `chrome/HELPER.md` in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks), protocol `ext/1`. The extension connects to the Node server on `/ws` as device `chrome`. The server sends these. The helper only posts macOS notifications (`ready.notify`):
 
-- `pair.show {code, timeoutMs?}` shows a 6-digit pairing code. A helper menu item or `npm run ext:pair` asks for it. The server prints the same code. The helper answers `pair.shown` and removes the banner when the wait elapses (2 minutes unless `timeoutMs` says otherwise).
+- `pair.show {code, timeoutMs?}` shows a 6-digit pairing code. `npm run ext:pair` asks the running server for it. The server prints the same code and sends `pair.show`. The helper answers `pair.shown` and removes the banner when the wait elapses (2 minutes unless `timeoutMs` says otherwise). A successful pair stores a hashed token in `ext-clients.json`. `npm run ext:revoke -- <name>` removes it.
 - `confirm.show {id, title, body, timeoutMs?}` posts one notification with Accept and Reject. The title is the control name. The body is the type and the site, for example `button on youtube.com`. A new or edited mapping waits 30 s. A sensitive action waits 15 s. The helper answers `confirm.shown` when the banner is up. macOS 12 will not let this ad-hoc helper use UserNotifications, so the banner is posted with the older notification center, from `helper/bin/gc-helper.app`.
 - `confirm.result {id, accepted}` is the answer. Closing the notification is Reject. On timeout the helper removes the banner and sends nothing. When notifications are off, the helper answers `error` `confirm_unavailable` and the action does not run.
 - The helper does not fetch presets, and it needs no new message for which app is in front. The first banner asks for notification permission.
@@ -227,7 +227,7 @@ App icons fall back to a letter tile when the helper returns no PNG; an `.icns`-
 
 ## Layout
 ```
-server/      Node: index.js, session.js (sessions, prefs, routing, cursor timeout, zoom state), helper.js, config.js, decks.js (load + resolve deck.run)
+server/      Node: index.js, session.js (sessions, prefs, routing, cursor timeout, zoom state), extension.js (ext/1 chrome client), helper.js, config.js, decks.js (load + resolve deck.run)
 src/         React client: App.jsx (tabs, top menu, auto Keys), connection.js, Trackpad.jsx, Keys.jsx + keysModel.js, Deck.jsx, Midi.jsx,
              Apps.jsx (+ icons.js cache), Menus.jsx + menuModel.js, Preferences.jsx + prefs.js, styles.css
 decks/       Built-in shortcut deck JSON (system + per-app)

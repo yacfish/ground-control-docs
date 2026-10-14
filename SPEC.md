@@ -399,9 +399,9 @@ Errors from the helper carry `ref: <request type>`.
 
 ### Chrome extension notifications (helper 0.9.0)
 
-The Chrome extension is a separate client in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks) (`chrome/HELPER.md`, protocol `ext/1`, final for v1 on 2026-10-13). It talks to the Node server. The Swift helper does not speak to the extension. Its work is the two macOS notifications below. It does not fetch or check presets. It already reports the frontmost app, and the server combines that with the extension's own focus message. The server does not send these messages yet. `ready.notify` is true from helper 0.9.0.
+The Chrome extension is a separate client in [ground-control-app-hooks](https://github.com/yacfish/ground-control-app-hooks) (`chrome/HELPER.md`, protocol `ext/1`, final for v1 on 2026-10-13). It connects to the Node server on `/ws` with `device: "chrome"`. The Swift helper does not speak to the extension. It posts the two macOS notifications below and already reports the frontmost app. The server sends `pair.show` and `confirm.show`, keeps the latest focus, rules, and mappings, and forwards a preset version change so the phone can refresh the deck. It does not fetch or check presets. A chrome client never takes the pointer, and its pointer, key, and other phone commands are dropped. `ready.notify` is true from helper 0.9.0. An older helper answers `confirm_unavailable`, and the action does not run.
 
-**Pairing code.** The user asks on the Mac, from a helper menu item or with `npm run ext:pair`. The server makes a 6-digit code, valid for 2 minutes, single use, and five wrong tries require a new code. `HELPER.md` describes the banner and does not name a message. This helper shows it for `pair.show`. The server prints the same code. One pairing banner is up at a time. A new code replaces it. The helper removes it when the wait elapses and sends no further message.
+**Pairing code.** `npm run ext:pair`, or a phone message `ext.pair.request`, asks the running server. The server makes a 6-digit code, valid for 2 minutes, single use, and five wrong tries require a new code. It prints the code and sends `pair.show`. The phone's reply does not include the code. The extension submits it with `ext.pair`. On success the server stores only a SHA-256 hash in `ext-clients.json` (mode 0600) and closes that socket. `npm run ext:revoke -- <name>` removes the token. The phone token is never an extension token. One live socket per extension id; a new connection closes the old one. The origin must be `chrome-extension://<id>`. With an empty `extension.allowedIds` list, only a connection from this Mac is accepted. One pairing banner is up at a time. A new code replaces it. The helper removes it when the wait elapses and sends no further message.
 
 **Confirm.** Adding or editing a mapping, and running an action the extension has marked sensitive, asks on the Mac. The helper posts one notification through `UNUserNotificationCenter`, in a category with Accept and Reject. The title is the control name. The body is the control type and the site, for example `button on youtube.com`. The phone shows a status line. It does not show a confirm sheet.
 
@@ -461,7 +461,7 @@ The server sends `confirm.show`. A mapping confirm waits 30 s. A sensitive actio
 - MIDI feedback (virtual destination → phone LEDs).
 - Gesture shortcuts (three-finger swipe ⇒ Mission Control / switch Spaces).
 - Bonjour discovery for the QR/bookmark flow.
-- Chrome extension (`ext/1`, specified in ground-control-app-hooks `chrome/HELPER.md`). The extension talks to the Node server. Helper 0.9.0 shows the pairing-code notification (`pair.show`) and the Accept / Reject notification (`confirm.show` / `confirm.result`). The server does not send them yet. The helper does not fetch presets.
+- Chrome extension (`ext/1`, specified in ground-control-app-hooks `chrome/HELPER.md`). The extension talks to the Node server. The server accepts a `chrome` client on `/ws`, checks the extension origin, pairs it with a hashed token, and sends `pair.show` and `confirm.show`. A preset version change is forwarded to the phone. The helper does not fetch presets. The phone deck for Chrome is not built yet.
 
 ---
 
@@ -486,13 +486,13 @@ The server sends `confirm.show`. A mapping confirm waits 30 s. A sensitive actio
 | No hosted CI (GitHub Actions removed): `npm run check` and, on a Mac, `npm run check:helper` before pushing | Locked |
 | Final product (§2.1): free notarized Mac menu-bar app off the store + App Store iPhone app (free trackpad and keys, Pro in-app purchase). The Mac gates Pro commands after a signed StoreKit transaction. The browser page stays the free remote | Locked |
 | Editable grids: MIDI chooses its column and row counts. The Deck uses fixed 50×50 cells, separate width and height, and pages. Both are in this build (§6.2, §6.3). Deck buttons still cannot send every helper command the plan lists | Locked |
-| Chrome extension confirms and the pairing code are macOS notifications from the helper (`pair.show`, `confirm.show` / `confirm.result`, Accept and Reject). Protocol `ext/1` in ground-control-app-hooks. The helper does not talk to the extension and does not fetch presets. Helper 0.9.0 posts the banners. The server does not send them yet | Helper built |
+| Chrome extension confirms and the pairing code are macOS notifications from the helper (`pair.show`, `confirm.show` / `confirm.result`, Accept and Reject). Protocol `ext/1` in ground-control-app-hooks. The server sends those messages, drops chrome input, and forwards preset versions to the phone. The helper does not talk to the extension and does not fetch presets | Server wired |
 
 ---
 
 ## 12. Development and verification
 
-- `npm test`: end-to-end protocol smoke test (`scripts/smoke-test.js`) against `scripts/mock-helper.js`; runs on Linux, no Mac needed. Also unit-checks `src/keysModel.js` (echo, diff, repeat timing) and `src/menuModel.js`.
+- `npm test`: end-to-end protocol smoke test (`scripts/smoke-test.js`) against `scripts/mock-helper.js`; runs on Linux, no Mac needed. Also unit-checks `src/keysModel.js` (echo, diff, repeat timing), `src/menuModel.js`, and the Chrome extension client (`scripts/extension-test.js`, `scripts/mock-extension.js`).
 - `npm run check`: `npm test` then `npm run build`. Run before every push; there is no hosted CI.
 - `npm run check:helper` (`scripts/check-helper.sh`, macOS only, skips elsewhere): builds the helper with `scripts/build-helper.sh` and checks `ready`, refusal of unconfirmed sleep / shut down, `textfocus.watch` / `cursor.scale`, the zoom capability with a read-only `zoom.get`, helper 0.9.0 with `notify`, a bad `confirm.show` / `pair.show` and an answer to a real one, prompt exit on SIGTERM, the Apps probe, MIDI with all-notes-off, and `menu.get` / `menu.invoke bad_path`. GUI-session-only steps print `WARN` and are skipped instead of failing when there is no GUI session (e.g. over SSH): MIDI when CoreMIDI client creation fails, and the Apps probe when `launchctl managername` is not `Aqua` (or MIDI already showed there is no GUI session).
 - `node scripts/helper-probe.js --verbose`: real helper lists Dock / Applications / running apps and one icon (read-only).
