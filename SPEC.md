@@ -90,13 +90,13 @@ Store remote-desktop apps are viewers. The program that injects input on the con
 
 Mirrors ClipBridge:
 
-1. First run generates a random token (24 bytes, base64url) at `~/.config/ground-control/token` (mode `0600`). Above the codes it prints the bookmark URL for this Mac (`http://127.0.0.1:8788/?k=<token>` when listening on every interface) as a clickable terminal link. For every LAN / Tailscale address it prints a QR code of the bookmark URL, with the interface and address named on the line above the code. The MagicDNS form is printed as text:
+1. First run generates a random token (24 bytes, base64url) at `~/.config/ground-control/token` (mode `0600`). Above the codes it prints the bookmark URL for this Mac (`http://127.0.0.1:8788/?k=<token>` when listening on every interface) as a clickable terminal link. On a Mac it reads the Bonjour name (`scutil --get LocalHostName`) and, when that name is one label, prints one QR for `http://<name>.local:8788/?k=<token>` instead of a QR per LAN address. Without that name, each LAN address still gets a QR. Each Tailscale address still gets its own QR, because `.local` is only on the local link. The MagicDNS form is printed as text:
    ```
    http://127.0.0.1:8788/?k=<token>
-   http://<mac-ip>:8788/?k=<token>
+   http://<name>.local:8788/?k=<token>
    http://<mac>.<tailnet>.ts.net:8788/?k=<token>
    ```
-2. The client stores the token in `localStorage`. In the browser it leaves `?k=` in the address and shows a banner until that banner is dismissed, so Add to Home Screen saves the pairing link. In the Home Screen web app (`navigator.standalone`, or `display-mode: standalone` / `fullscreen`) it strips `?k=` immediately and shows no banner. That strip does not change the icon's saved address, so the next launch from the icon still arrives with `?k=`.
+2. The client stores the token in `localStorage`. In the browser it leaves `?k=` in the address and shows a banner until that banner is dismissed, so Add to Home Screen saves the pairing link. Chrome launches the icon from the manifest `start_url`, not from the address bar. When the page was opened with a valid `?k=`, the server puts that token in `start_url` and points the page at that manifest. In the Home Screen web app (`navigator.standalone`, or `display-mode: standalone` / `fullscreen`) it strips `?k=` immediately and shows no banner. That strip does not change the icon's saved address, so the next launch from the icon still arrives with `?k=`.
 3. The client opens `ws://<host>/ws` (or `wss://` when served over HTTPS) and sends the token in its **first message** (`hello`). The server closes the socket if no valid `hello` arrives within 2 s. (Keeps the token out of upgrade-URL logs.)
 4. Wrong token, missing `hello` or a `hello` timeout ⇒ close with code `4401`; the client shows a "re-open your bookmark link" screen. A bearer token on the upgrade request (`Authorization: Bearer`) is also accepted.
 

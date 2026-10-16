@@ -60,7 +60,7 @@ npm run build          # React client → public/
 npm start              # server on :8788
 ```
 
-`npm start` prints a clickable link for this Mac (`http://127.0.0.1:8788/?k=<token>`), then a QR code for each LAN address and another for the Tailscale address when the Mac is on a tailnet. The line above each code names the interface and the address (`192.168.1.20` and so on). Click the link to open the page in the browser on this Mac. Scan a code with the phone camera; the code opens `http://<address>:8788/?k=<token>`. The MagicDNS address stays as text: `http://<mac>.<tailnet>.ts.net:8788/?k=<token>`. Open one on your phone. In the browser the page leaves `?k=` in the address and shows a banner: add it to the Home Screen before dismissing, so the shortcut keeps the pairing link. The Home Screen web app hides that banner and removes `?k=` from the visit; the icon's saved address stays as it was. The token is stored in `~/.config/ground-control/token` (mode 0600); delete that file to rotate it.
+`npm start` prints a clickable link for this Mac (`http://127.0.0.1:8788/?k=<token>`). When the Mac has a Bonjour name it prints one QR for `http://<name>.local:8788/?k=<token>` instead of a QR for each LAN address, so a new router address does not break the bookmark. Without that name, each LAN address still gets a QR. A Tailscale address still gets its own QR. The line above each code names the kind and the host. Click the link to open the page in the browser on this Mac. Scan a code with the phone camera. The MagicDNS address stays as text: `http://<mac>.<tailnet>.ts.net:8788/?k=<token>`. Open one on your phone. In the browser the page leaves `?k=` in the address and shows a banner: add it to the Home Screen before dismissing, so the shortcut keeps the pairing link. Chrome saves the manifest start URL, so that URL includes the token when the page was opened with `?k=`. The Home Screen web app hides that banner and removes `?k=` from the visit; the icon's saved address stays as it was. The token is stored in `~/.config/ground-control/token` (mode 0600); delete that file to rotate it.
 
 After `git pull`: run `npm run build` (client) and, when helper sources changed, `npm run build:helper`, then restart `npm start`. The server logs the helper version on start and logs once when a feature needs a newer helper.
 
@@ -191,7 +191,7 @@ Use the Mac's `100.x` address or MagicDNS name with `:8788`. For HTTPS (`wss://`
 
 | Area | Status |
 |---|---|
-| Server: static client, `/api/health`, `/api/status` (bearer), token file, LAN/Tailscale QR codes, MagicDNS URL | ✅ |
+| Server: static client, `/api/health`, `/api/status` (bearer), token file, Bonjour `.local` QR (LAN addresses when that name is missing), Tailscale QR, MagicDNS URL | ✅ |
 | WebSocket `/ws`: `hello` auth within 2 s (or `Authorization: Bearer` on upgrade), close `4401` | ✅ |
 | Heartbeat (`ping`/`pong` 3 s, drop after 10 s), reconnect with backoff | ✅ |
 | One pointer owner, `session.engage` / `release` / `takeover` / `revoked`. The Trackpad tab keeps the pointer until that phone leaves it. Release on disconnect / tab hidden / shutdown. Idle is 0 s: a one-phone key or MIDI session releases as soon as the action is sent. A modifier that is still down stays down until a key, a trackpad mouse-up, or a tap releases it | ✅ |
