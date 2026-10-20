@@ -179,6 +179,14 @@ Drop overrides in `~/.config/ground-control/decks/*.json`: a user file replaces 
 
 The **System** popup's Mission Control / App Exposé / Show Desktop / Screenshot (⌘⇧3, instant full screen) buttons send the standard macOS shortcuts, so they need those shortcuts **enabled in System Settings → Keyboard → Keyboard Shortcuts → Mission Control / Screenshots**. Cut, Copy, Paste, Previous (⌘⇧`), Next (⌘`), and Close are the same keystrokes in every app and apply to whatever is in front. **Sleep** and **Shut Down** always ask for confirmation on the phone first (OK → runs immediately); see [`decks/README.md`](decks/README.md#confirmation-dangerous-buttons). **Controls** is off the button list for now, so a deck does not have to click. Pressing a control, setting a slider or a field, and stepping a value through Accessibility stay the long-term goal. **Key** and **Extra Keys** can use **Toggle mode**: the first tap holds the key, characters repeat after a short wait, and the second tap releases it. Modifiers stay down and do not repeat. A click, a scroll step, and screen zoom stay on the Trackpad. An app’s own zoom is a menu action when that app offers one. Hide, quit, launch, and Dock items stay on the Apps tab. MIDI stays on the MIDI tab.
 
+### Bookmarks tab
+Off by default: turn it on in Preferences > Tabs. Bookmarks are saved on the phone only.
+- The folder row starts with Star, then your folders. It scrolls sideways. Long press a folder (not Star) and drag left or right to reorder it; it turns red while moving.
+- The round plus button creates a bookmark in the current folder. The gear opens folder settings: rename, the red trash (deletes the folder and everything in it), and Delete all (empties it). Star only has Delete all.
+- Tap a bookmark to type it on the Mac. It does not appear in the Text tab's History.
+- Swipe left on a bookmark for Move to, Edit and Delete. Long press and drag up or down to reorder.
+- With the Bookmarks tab on, swiping left on a sent message in the Text tab also shows a star that saves it as a bookmark.
+
 ### Menus tab
 The **Menus** tab shows the frontmost app's menu bar as a drill-down list: the **Apple menu () first**, then the app's menus. Tap a menu to open it, the **‹** button or a breadcrumb segment to go back, **↻** to re-read. Each item shows its checkmark, keyboard-shortcut hint (e.g. `⇧⌘N`) and is dimmed when disabled. Submenus are read lazily, one level per tap, so dynamic menus (Open Recent, Window…) are always current; the list resets to the top when another app comes to the front.
 
