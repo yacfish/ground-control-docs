@@ -185,6 +185,7 @@ Off by default: turn it on in Preferences > Tabs. Bookmarks are saved on the pho
 - The round plus button creates a bookmark in the current folder. The gear opens folder settings: rename, the red trash (deletes the folder and everything in it), and Delete all (empties it). Star only has Delete all.
 - Tap a bookmark to type it on the Mac. It does not appear in the Text tab's History.
 - Swipe left on a bookmark for Move to, Edit and Delete. Long press and drag up or down to reorder.
+- Secret bookmarks (Secret toggle) keep only a reference in the list; the text goes to the Keychain in the app (memory for this visit in a browser). They show the label in italic, or dots, with a red border, and need Face ID to send or edit.
 - With the Bookmarks tab on, swiping left on a sent message in the Text tab also shows a star that saves it as a bookmark.
 
 ### Menus tab
