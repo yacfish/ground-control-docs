@@ -109,17 +109,17 @@ Each Mac runs its own server; the phone keeps one bookmark per Mac.
 ## 4. Sessions, pointer ownership and safety
 
 ### One trackpad
-Only **one phone holds the trackpad**. Move, scroll, buttons, drag lock, screen zoom and the enlarged cursor belong to that phone. Opening the Trackpad tab sends `session.engage` and claims it before a finger is down. That phone keeps it while the tab stays selected. Leaving the tab sends `session.release` for the pointer. A second phone can still open the tab: the pad says "In use by <device name>", and the buttons, drag lock, modifiers and zoom controls are grayed out. The Trackpad tab icon shows a green dot on the phone that holds it and a red dot on the others. No dot means it is free. There is no live / busy pill in the top bar. `session.takeover` still moves the pointer and sends the previous phone `session.revoked`. It does not release anyone's keys or MIDI notes.
+Only **one phone holds the trackpad**. Move, scroll, buttons, drag lock, screen zoom and the enlarged cursor belong to that phone. Opening the Mouse tab sends `session.engage` and claims it before a finger is down. That phone keeps it while the tab stays selected. Leaving the tab sends `session.release` for the pointer. A second phone can still open the tab: the pad says "In use by <device name>", and the buttons, drag lock, modifiers and zoom controls are grayed out. The Mouse tab icon shows a green dot on the phone that holds it and a red dot on the others. No dot means it is free. There is no live / busy pill in the top bar. `session.takeover` still moves the pointer and sends the previous phone `session.revoked`. It does not release anyone's keys or MIDI notes.
 
-Keys, text, deck buttons, menu presses, app actions and MIDI are accepted from any connected phone. They do not take the trackpad. One phone alone still engages on the first of these and grows the cursor, then releases immediately (`idleMs` is 0). Sitting on the Trackpad tab does not time out.
+Keys, text, deck buttons, menu presses, app actions and MIDI are accepted from any connected phone. They do not take the trackpad. One phone alone still engages on the first of these and grows the cursor, then releases immediately (`idleMs` is 0). Sitting on the Mouse tab does not time out.
 
 `window.press` and `window.set` stay with the trackpad phone. Their click fallback moves the pointer.
 
 ### Engage / release
-- `session.engage`: claims the trackpad when it is free. Server marks this client as owner and **grows the cursor** (§5). If another phone holds it, the claim is refused and the phone is told who does. A claim from the Trackpad tab does not time out.
+- `session.engage`: claims the trackpad when it is free. Server marks this client as owner and **grows the cursor** (§5). If another phone holds it, the claim is refused and the phone is told who does. A claim from the Mouse tab does not time out.
 - `session.takeover`: claims it anyway. The previous phone loses the pointer only.
-- `session.release`: this phone gives up what it holds. The trackpad phone also gives up the pointer. Leaving the Trackpad tab sends this.
-- **Idle**: `idleMs` is 0. It does not give the trackpad up. The phone that has the Trackpad tab open keeps it. A one-phone session started from a key, text, deck, or MIDI action releases as soon as that action is sent. A latched or locked modifier, or a toggled key, stays down until it is released. That one-phone session releases once nothing is held.
+- `session.release`: this phone gives up what it holds. The trackpad phone also gives up the pointer. Leaving the Mouse tab sends this.
+- **Idle**: `idleMs` is 0. It does not give the trackpad up. The phone that has the Mouse tab open keeps it. A one-phone session started from a key, text, deck, or MIDI action releases as soon as that action is sent. A latched or locked modifier, or a toggled key, stays down until it is released. That one-phone session releases once nothing is held.
 - **Socket drop**: heartbeat missing for 10 s, or socket closes ⇒ that phone's release.
 
 ### Release
@@ -139,7 +139,7 @@ Client sends `ping` every 3 s; server replies `pong`. Server considers the clien
 ## 5. Cursor visibility (couch mode)
 
 - On `session.engage` the helper **enlarges the system cursor** (configurable scale, default ~3×) and records the previous scale.
-- On release (leaving the Trackpad tab, the phone locking, disconnect) or socket drop it **restores** the recorded scale. A cursor timeout can shrink it sooner. Idle does not restore it while the Trackpad tab is holding the pointer.
+- On release (leaving the Mouse tab, the phone locking, disconnect) or socket drop it **restores** the recorded scale. A cursor timeout can shrink it sooner. Idle does not restore it while the Mouse tab is holding the pointer.
 - Persist the "original" scale to disk before changing it, so a crash or forced quit can restore it on next launch.
 - Current build: the helper uses the private `CGSSetCursorScale` (looked up with dlsym) and `cursor-restore.json`. Per phone, Preferences pick the engage size and a **cursor timeout** after which the server shrinks the cursor (`cursor.scale {scale:1}`) and re-grows it on the next pointer activity (§6.7). `cursorMode` is `system` or `off`.
 
@@ -147,7 +147,7 @@ Client sends `ping` every 3 s; server replies `pong`. Server considers the clien
 
 ## 6. Control surfaces
 
-All surfaces share the same socket and session. Bottom tab bar on the phone: **Trackpad · Keys · Text · Deck · MIDI · Apps · Menus** (the Apps tab has three sections: **Dock · Running · Apps**, §6.4). Landscape and portrait layouts; large hit targets for use without looking.
+All surfaces share the same socket and session. Bottom tab bar on the phone: **Mouse · Keys · Text · Saved · Deck · MIDI · Apps · Menus** (the Apps tab has three sections: **Dock · Running · Apps**, §6.4). Landscape and portrait layouts; large hit targets for use without looking.
 
 ### 6.1 Trackpad + keyboard
 **Trackpad**
@@ -306,7 +306,7 @@ Preferences (centered Cancel / OK dialog), saved in the phone's `localStorage` a
 - **Open keyboard when Keys tab is selected** (off by default, phone only, not sent to the server). Every tap on the Keys tab focuses the hidden Keys textarea synchronously in the tab's click handler, because iOS Safari only raises the keyboard for a `focus()` made inside the user gesture. Keys already showing: the field is focused directly (blurred first if it still counts as focused, so a dismissed keyboard comes back). Keys not mounted yet: an always-mounted, offscreen proxy textarea is focused in the tap, and Keys moves focus to its field right after it mounts (the keyboard stays up across that programmatic focus change); the proxy is blurred after 600 ms if Keys never mounts. An automatic switch to Keys requests the same focus without a gesture: Android / desktop focus the field, iOS will not show the keyboard. With the software keyboard down, Keys shows a round button at the bottom right of the panel (a keyboard with an upward chevron). That tap focuses the type field inside the gesture, blurred first if iOS still counts it as focused, and the button hides while `visualViewport` reports a keyboard inset.
 - **Mouse**: **Pointer and scroll speed** (`pointerSpeed`, 0.25 to 3, multiplies `POINTER_BASE_GAIN` (2.5) x `sensitivity`; the same multiplier, without the base gain or acceleration, scales `pointer.scroll` dx / dy server-side, so 1.0 leaves scroll unchanged), **Acceleration** (0 to 1.5, pointer only, replaces config `acceleration` for this phone), **Invert scroll direction** (flips both scroll axes server-side).
 - **Cursor size**: Off / Small / Medium / Large = engage scale 1 / 2 / 3 / 4, sent to the helper with `session.engage {cursorScale}` and live as `cursor.scale {scale}` while engaged.
-- **Cursor timeout**: `cursorTimeout` seconds (0.5 to 10, slider steps 0.5 / 1 / 2 / 3 / 5 / 10) or 0 = *Until I stop driving* (it stays big until the phone leaves the Trackpad tab, locks, or disconnects). `null` = config `cursorTimeoutMs` (default 0). Timed on the server: after the owner's last pointer activity (`pointer.move` / `button` / `click` / `scroll`, or a fresh `session.engage` touch) it sends `cursor.scale {scale:1}`; the next pointer activity sends `cursor.scale {scale}` again. Does not end the session. Needs helper 0.6.0+ (`cursor.scale`); older helpers keep the cursor big until release.
+- **Cursor timeout**: `cursorTimeout` seconds (0.5 to 10, slider steps 0.5 / 1 / 2 / 3 / 5 / 10) or 0 = *Until I stop driving* (it stays big until the phone leaves the Mouse tab, locks, or disconnects). `null` = config `cursorTimeoutMs` (default 0). Timed on the server: after the owner's last pointer activity (`pointer.move` / `button` / `click` / `scroll`, or a fresh `session.engage` touch) it sends `cursor.scale {scale:1}`; the next pointer activity sends `cursor.scale {scale}` again. Does not end the session. Needs helper 0.6.0+ (`cursor.scale`); older helpers keep the cursor big until release.
 - **Zoom entry method** (phone only, not sent in `prefs.set`): **Pinch** (default), **Slider**, or **Buttons**. Pinch and the slider set a factor from 1.00 to 6.00 (`zoom.set {factor}`). Buttons stay the discrete 1X / 2X / 4X levels (`zoom.set {level}`). Choosing another method on Preferences OK returns the zoom to 1X. Two-finger drag still scrolls while pinch is the entry method.
 - **Zoom during motion**: 1X / 1.25X / 1.5X (`zoomMotion` 1 / 1.25 / 1.5, default 1X). While this phone moves the pointer, the Mac screen zooms to that level (private zoom), then returns to the button level `zoom.motionIdleMs` (500 ms) after the last movement; 1X never zooms in further on movement (§6.8).
 - **Zoom timeout**: Off / 300s / 60s / 15s (`zoomTimeout` 0 / 300 / 60 / 15, default 60). A 2X or 4X button level returns to 1X after the phone sits still for that long (§6.8). Confirmed on this Mac.
@@ -513,7 +513,7 @@ A deck text button may set `secret: true`. The deck file stores `secretRef` and,
 | WebSocket stream for input, not HTTP | Locked |
 | Phone is a controller only: **no screen stream** | Locked |
 | Swift helper posts CGEvent; Accessibility permission | Locked |
-| Cursor grows on engage, restores on release / socket drop. Idle restores it only when the Trackpad tab is not holding the pointer | Locked |
+| Cursor grows on engage, restores on release / socket drop. Idle restores it only when the Mouse tab is not holding the pointer | Locked |
 | Menus invoked via **Accessibility (AXPress) only**, never AppleScript and never by clicking menu-bar coordinates | **Locked** |
 | Apple menu always present in the menu tree | Locked |
 | Apps tab = **Dock · Running · Apps** sections (no new bottom tab); running-apps switcher kept | Locked |

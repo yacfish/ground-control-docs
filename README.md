@@ -27,7 +27,7 @@ Ground Control is a sibling of [ClipBridge](https://github.com/yacfish/clipbridg
 - **LAN or Tailscale** only, default port **8788** (ClipBridge keeps 8787),
 - a single **WebSocket** stream for input: the phone is a controller, it never shows the Mac's screen.
 
-Surfaces on the phone (bottom tabs **Trackpad · Keys · Text · Deck · MIDI · Apps · Menus**), all over the same socket:
+Surfaces on the phone (bottom tabs **Mouse · Keys · Text · Saved · Deck · MIDI · Apps · Menus**), all over the same socket:
 
 1. **Trackpad** with Left / Drag lock / Right buttons and zoom (pinch or a slider from 1X to 6X, or **1X · 2X · 4X** buttons)
 2. **Keys**: phone keyboard to Mac, special keys, sticky modifiers
@@ -103,7 +103,7 @@ Optional `~/.config/ground-control/config.json`:
 - `midiSourceName`: name of the CoreMIDI virtual source.
 - `zoom` picks and tunes the Trackpad 1X / 2X / 4X method (see below): `method` (`auto` / `private` / `keys` / `scroll`), `keySteps2x` / `keySteps4x` / `keyOut` / `keyGapMs` for `keys`, `units2x` / `units4x` / `out` / `scrollUnits` / `scrollTap` / `continuous` / `suppress` for `scroll`, `smooth` for `private`, `motionIdleMs` (default 500) for Zoom during motion. Step counts are guesses until tuned on a Mac.
 
-### Trackpad tab
+### Mouse tab
 - One-finger drag moves the pointer (host-side acceleration), tap = left click, double-tap = double click, two-finger tap = right click, two-finger drag = scroll with momentum, hold then drag = select / drag.
 - **Left** / **Drag lock** / **Right** buttons under the pad.
 - Zoom under the pad. Preferences → **Zoom entry method** picks **Pinch** (default), **Slider**, or **Buttons**. Pinch and the slider set anywhere from 1X to 6X. Buttons are the discrete **1X · 2X · 4X** presses. Switching method returns the zoom to 1X. Helper 0.8.2, `zoom.method` in config.json, default `auto`. macOS has no public API to set the Zoom level, and on macOS 12.7.6 Accessibility Zoom ignored synthesized Control + scroll (helpers 0.7.0 to 0.7.2), so there are three methods:
@@ -126,7 +126,7 @@ Optional `~/.config/ground-control/config.json`:
   - pressing a button while motion-zoomed: a level at or above the motion level replaces the motion zoom; a lower one is remembered and applied when motion ends (no zoom out while you move);
   - Release, disconnect, the idle timeout and sending text drop only this extra zoom, back to the 1X / 2X / 4X button level. Stopping `npm start` puts the private zoom back to 1x. Needs helper 0.8.2 and the private zoom call (with an older helper the setting does nothing and the server logs a rebuild hint once).
 
-**Zoom timeout** (Preferences, under Zoom during motion: **Off** / **300s** / **60s** / **15s**, 60s by default). Confirmed on this Mac: a 2X or 4X button level returns to 1X that long after the phone sits still. Moving the pointer, keys, text, decks, and the other actions that keep the session alive start the wait again from the beginning. Changing the duration applies to a wait that is already running, so picking 15s is not stuck behind a 300s wait. Leaving the Trackpad tab, the phone locking, and disconnect leave both the zoom and the wait in place. Off keeps the zoom until you press 1X. The server sends that return to 1X on its own, without taking the pointer. If a zoom-during-motion level is on screen when the wait ends, that extra zoom ends first and the screen then goes to 1X. A heartbeat ping does not restart the wait.
+**Zoom timeout** (Preferences, under Zoom during motion: **Off** / **300s** / **60s** / **15s**, 60s by default). Confirmed on this Mac: a 2X or 4X button level returns to 1X that long after the phone sits still. Moving the pointer, keys, text, decks, and the other actions that keep the session alive start the wait again from the beginning. Changing the duration applies to a wait that is already running, so picking 15s is not stuck behind a 300s wait. Leaving the Mouse tab, the phone locking, and disconnect leave both the zoom and the wait in place. Off keeps the zoom until you press 1X. The server sends that return to 1X on its own, without taking the pointer. If a zoom-during-motion level is on screen when the wait ends, that extra zoom ends first and the screen then goes to 1X. A heartbeat ping does not restart the wait.
 
 **Stuck zoom?** The private zoom is not Accessibility Zoom, so ⌥⌘8 / Control-scroll will not undo it. Run `node scripts/zoom-probe.js private 1` on the Mac (sets it back to 1x right away), or restart `npm start` (the server resets a leftover private zoom when it starts the helper).
 
@@ -146,7 +146,7 @@ Tap **⋮** in the top bar: **Light mode / Dark mode**, **Preferences**, **Disco
 - **Open keyboard when Keys tab is selected** (off by default, stays on the phone): tapping the Keys tab, even when Keys is already showing, focuses the type field so the phone keyboard comes up ready to type. Automatic switches to Keys also try, which works on Android but not on iOS (Safari only raises the keyboard for a focus made inside a tap).
 - **Pointer and scroll speed** (0.25x to 3x on top of the built-in pointer speed; the same multiplier scales two-finger scrolling and its momentum, 1.00x scrolls exactly as before), **Acceleration** (pointer only), **Invert scroll direction**.
 - **Cursor size** while engaged: Off / Small / Medium / Large (default = `cursorScale` from config, normally Medium).
-- **Cursor timeout**: how long the enlarged cursor stays big after the last pointer activity, 0.5 s to 10 s, or *Until I stop driving* (big until you leave the Trackpad tab, lock the phone, or disconnect). The server shrinks it with `cursor.scale 1` and re-grows it on the next move or touch (helper 0.6.0+). Default = `cursorTimeoutMs` from config (0 = Until I stop driving).
+- **Cursor timeout**: how long the enlarged cursor stays big after the last pointer activity, 0.5 s to 10 s, or *Until I stop driving* (big until you leave the Mouse tab, lock the phone, or disconnect). The server shrinks it with `cursor.scale 1` and re-grows it on the next move or touch (helper 0.6.0+). Default = `cursorTimeoutMs` from config (0 = Until I stop driving).
 
 ### Shortcut decks
 The **Deck** tab shows the deck for the app in front on a 6 by 10 grid. Each cell is a square sized to fit that grid, on any phone. **Edit** moves, adds, and removes buttons; drag one off the right edge to open the next page, and swipe between pages when there is more than one. Until that deck is edited on the phone, the built-in buttons are laid out two across. A **Page Capsule** is a box whose page changes with what is in front: creating one asks for its size and background (Theme or a swatch), then you add widgets inside. A page shows on a Chrome address (it keeps working in fullscreen), on a window control's text, or always; the longest match wins. Inside a capsule a widget can run a Chrome extension mapping for that page (live toggles and the seek slider included; a sensitive mapping still asks on the Mac) or drive one window control, web page content included. An app with no deck shows an empty state. **Ground Control** in the top-left of the status bar opens the system grid on every tab; tap the title again, or tap outside the grid, to close it. Built-in decks in [`decks/`](decks/):
@@ -179,14 +179,14 @@ Drop overrides in `~/.config/ground-control/decks/*.json`: a user file replaces 
 
 The **System** popup's Mission Control / App Exposé / Show Desktop / Screenshot (⌘⇧3, instant full screen) buttons send the standard macOS shortcuts, so they need those shortcuts **enabled in System Settings → Keyboard → Keyboard Shortcuts → Mission Control / Screenshots**. Cut, Copy, Paste, Previous (⌘⇧`), Next (⌘`), and Close are the same keystrokes in every app and apply to whatever is in front. **Sleep** and **Shut Down** always ask for confirmation on the phone first (OK → runs immediately); see [`decks/README.md`](decks/README.md#confirmation-dangerous-buttons). **Controls** is off the button list for now, so a deck does not have to click. Pressing a control, setting a slider or a field, and stepping a value through Accessibility stay the long-term goal. **Key** and **Extra Keys** can use **Toggle mode**: the first tap holds the key, characters repeat after a short wait, and the second tap releases it. Modifiers stay down and do not repeat. A click, a scroll step, and screen zoom stay on the Trackpad. An app’s own zoom is a menu action when that app offers one. Hide, quit, launch, and Dock items stay on the Apps tab. MIDI stays on the MIDI tab.
 
-### Bookmarks tab
+### Saved tab
 Off by default: turn it on in Preferences > Tabs. Bookmarks are saved on the phone only.
 - The folder row starts with Star, then your folders. It scrolls sideways. Long press a folder (not Star) and drag left or right to reorder it; it turns red while moving.
 - The round plus button creates a bookmark in the current folder. The gear opens folder settings: rename, the red trash (deletes the folder and everything in it), and Delete all (empties it). Star only has Delete all.
 - Tap a bookmark to type it on the Mac. It does not appear in the Text tab's History.
 - Swipe left on a bookmark for Move to, Edit and Delete. Long press and drag up or down to reorder.
 - Secret bookmarks (Secret toggle) keep only a reference in the list; the text goes to the Keychain in the app (memory for this visit in a browser). They show the label in italic, or dots, with a red border, and need Face ID to send or edit.
-- With the Bookmarks tab on, swiping left on a sent message in the Text tab also shows a star that saves it as a bookmark.
+- With the Saved tab on, swiping left on a sent message in the Text tab also shows a star that saves it as a bookmark.
 
 ### Menus tab
 The **Menus** tab shows the frontmost app's menu bar as a drill-down list: the **Apple menu () first**, then the app's menus. Tap a menu to open it, the **‹** button or a breadcrumb segment to go back, **↻** to re-read. Each item shows its checkmark, keyboard-shortcut hint (e.g. `⇧⌘N`) and is dimmed when disabled. Submenus are read lazily, one level per tap, so dynamic menus (Open Recent, Window…) are always current; the list resets to the top when another app comes to the front.
@@ -203,7 +203,7 @@ Use the Mac's `100.x` address or MagicDNS name with `:8788`. For HTTPS (`wss://`
 | Server: static client, `/api/health`, `/api/status` (bearer), token file, Bonjour `.local` QR (LAN addresses when that name is missing), Tailscale QR, MagicDNS URL | ✅ |
 | WebSocket `/ws`: `hello` auth within 2 s (or `Authorization: Bearer` on upgrade), close `4401` | ✅ |
 | Heartbeat (`ping`/`pong` 3 s, drop after 10 s), reconnect with backoff | ✅ |
-| One pointer owner, `session.engage` / `release` / `takeover` / `revoked`. The Trackpad tab keeps the pointer until that phone leaves it. Release on disconnect / tab hidden / shutdown. Idle is 0 s: a one-phone key or MIDI session releases as soon as the action is sent. A modifier that is still down stays down until a key, a trackpad mouse-up, or a tap releases it | ✅ |
+| One pointer owner, `session.engage` / `release` / `takeover` / `revoked`. The Mouse tab keeps the pointer until that phone leaves it. Release on disconnect / tab hidden / shutdown. Idle is 0 s: a one-phone key or MIDI session releases as soon as the action is sent. A modifier that is still down stays down until a key, a trackpad mouse-up, or a tap releases it | ✅ |
 | Helper spawn + JSON-lines protocol, auto-restart with backoff, dry-run when missing, capability flags (`textFocus`, `zoom`) with one-time rebuild hints | ✅ |
 | Trackpad: move (2.5x base gain + host-side acceleration), tap / double-tap / two-finger tap, two-finger scroll + momentum, hold-to-drag, drag lock, L/R buttons | ✅ |
 | Trackpad zoom buttons 1X / 2X / 4X via the private WindowServer zoom (helper 0.8.2), Zoom during motion, and zoom timeout (Off / 300s / 60s / 15s, default 60s; a 2X / 4X level returns to 1X after the phone sits still) | ✅ private method and zoom timeout confirmed on this Mac. `keys` / `scroll` stay the fallbacks (`scroll` was ignored by Accessibility Zoom on 12.7.6) |
@@ -228,7 +228,7 @@ Use the Mac's `100.x` address or MagicDNS name with `:8788`. For HTTPS (`wss://`
 
 1. `npm run build:helper && npm run build && npm start`
 2. On the Mac open Logic / Ableton / MainStage / GarageBand / any CoreMIDI host and look for input **Ground Control** (rename via `midiSourceName` in `~/.config/ground-control/config.json`).
-3. Phone → bookmark → **MIDI** tab: choose a layout or make a new one, set the grid and the channel, then tap pads and drag faders. **Edit** changes the controls. Notes / CCs should appear in the DAW’s MIDI monitor. Ending the session (leave the Trackpad tab, lock the phone, disconnect) sends all-notes-off when that phone is the last one.
+3. Phone → bookmark → **MIDI** tab: choose a layout or make a new one, set the grid and the channel, then tap pads and drag faders. **Edit** changes the controls. Notes / CCs should appear in the DAW’s MIDI monitor. Ending the session (leave the Mouse tab, lock the phone, disconnect) sends all-notes-off when that phone is the last one.
 
 Extra messages beyond SPEC §7:
 - server → client: `helper.status {available, running, reason}`, `menu.invoked {ok, path}`, `textfocus.status {state, helperVersion}`.
