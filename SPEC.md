@@ -356,6 +356,7 @@ JSON text frames, one message per frame. Every message has `t` (type). Client→
 | `dock.open` | `{id, path?, url?}` | open a Dock item by id (re-resolved helper-side); any phone |
 | `icon.get` | `{iconIds: [...]}` | ≤ 64 ids per message (client sends ≤ 24) |
 | `menu.get` | `{path?: [...]}` | top level when omitted; any client |
+| `clipboard.copy` | `{}` | the system popup's Copy: runs the system deck's Copy (⌘C), then replies `clipboard.text {ok, text?, changed}` with the Mac clipboard's text to this phone only, for its own clipboard. Not logged |
 | `zoom.set` | `{level: 1\|2\|4}` | zoom preset (§6.8); owner only (implicit engage); `bad_request` for other levels, `unsupported` with a pre-0.7.0 helper |
 | `prefs.set` | `{pointerSpeed?, acceleration?, cursorScale?, cursorTimeout?, autoKeys?, invertScroll?}` | per-phone Preferences (§6.7), any client; sent after every `welcome`; `null` resets a field to the server default |
 | `menu.invoke` | `{path: [...], id?, pid?}` | AXPress only; never AppleScript or coordinates; any phone; `pid` from the `menu` reply; refused with `stale_menu` if another app is now in front |
@@ -404,6 +405,7 @@ Server ↔ helper uses the same message shapes over stdin/stdout (newline-delimi
 | server → helper | `session.release` / `session.releasePointer` | full release when this phone is alone or last (§4) / pointer only while another phone is connected (mouse buttons, cursor, motion zoom). Both drop a motion zoom back to the button level. Only `session.release` sends all-notes-off |
 | server → helper | `textfocus.watch` | `{on}`; helper replies `textfocus.status {ok, watching, reason?}` and emits `textfocus` (§6.7) |
 | server → helper | `zoom.set` / `zoom.get` | `{level, from, method, keySteps2x, keySteps4x, keyOut, keyGapMs, units2x, units4x, out, scrollUnits, scrollTap, continuous, suppress, smooth, settleMs, invert, holdModifier}` / `{}` (§6.8) |
+| server → helper | `clipboard.read` | `{waitMs}`: waits up to `waitMs` (≤ 3000) for the pasteboard to change, then replies `clipboard.text {ok, text?, changed}` (text ≤ 65536 characters) |
 | server → helper | `zoom.motion` | `{on: true, level: 1\|1.25\|1.5, smooth}` / `{on: false, smooth}`: Zoom during motion (§6.8); helper replies `zoom.state {mode: motion, active, level, base?, factor, ok, error?}` when it changed the zoom |
 | server → helper | `zoom.resetPrivate` | `{}`: on helper (re)start when `zoom.get` reported `privateFactor > 1.001`; helper resets the private zoom to 1x and replies `zoom.state {mode: reset, method: private, level: 1, before, privateFactor?}` (only if it reset something) |
 | probe → helper | `zoom.once` | `{method: scroll\|keys\|private, delta \| factor, ...tuning}`: one scroll gesture of `delta`, `delta` shortcut presses, or private zoom `factor` (never sent by the server) |
