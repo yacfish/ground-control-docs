@@ -87,7 +87,7 @@ node scripts/zoom-probe.js private <factor>    # on a Mac: private zoom straight
 ```
 There is no hosted CI (GitHub Actions were removed): run `npm run check` before pushing, and `npm run check:helper` on a Mac when helper sources change.
 
-Open `http://<mac-ip>:5173/?k=<token>` on the phone during dev. Without a helper binary (or on Linux) the server runs in **dry-run** mode: everything works except events aren't posted; `GC_DEBUG=1` logs what would be sent. `GC_HELPER=/path/to/binary` overrides the helper location (e.g. `GC_HELPER=scripts/mock-helper.js`). `GC_DEBUG_HOOKS=1` logs every hook action with a millisecond timestamp: `[hook] 12:03:04.005 phone->server vlc volume set 0.42 id=...` when the phone's message arrives, `server->app` when it is forwarded, and `app->server ... ok 12ms` when the app answers.
+Open `http://<mac-ip>:5173/?k=<token>` on the phone during dev. Without a helper binary (or on Linux) the server runs in **dry-run** mode: everything works except events aren't posted; `GC_DEBUG=1` logs what would be sent. `GC_HELPER=/path/to/binary` overrides the helper location (e.g. `GC_HELPER=scripts/mock-helper.js`).
 
 ### Configuration
 Optional `~/.config/ground-control/config.json`:
