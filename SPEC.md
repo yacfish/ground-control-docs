@@ -220,6 +220,7 @@ All surfaces share the same socket and session. Bottom tab bar on the phone: **M
   | Slack | `com.tinyspeck.slackmacgap` | Navigate (Jump To, Back, Forward, Previous Channel, Next Channel, Next Unread); Views (All Unreads, Threads, Activity, Search); Actions (Mark Read, Huddle, React +1, Set Status) |
 
 - A deck button that targets a **menu item** uses the same AX invocation as §6.5 (preferred over a keystroke when an app's shortcut is unreliable). An edited button sends that helper message itself (`key.press`, `key.text`, `menu.invoke`, `apps.activate`). Built-in Sleep and Shut Down still go through `deck.run` with `confirmed: true`.
+- A text action may set `enter: true` (editor: "Press Enter after the text", default Off; a layout saved without it stays Off). After the `key.text` the phone sends `key.press return` with no modifiers, the same message as a Return key button. Both go through the same ordered send queue and the helper posts them in turn, so Return lands after the text. This holds for plain and secret text, inside a sequence, and for plain text on `deck.run`.
 
 ### 6.3 Virtual MIDI
 - The helper creates a **CoreMIDI virtual source** named "Ground Control" (overridable via `config.json` → `midiSourceName` / helper `--midi-source-name`), visible to any DAW / synth / VJ app (Logic, Ableton, MainStage, Resolume…) with no driver install.
